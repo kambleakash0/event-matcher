@@ -5,24 +5,21 @@ Matches attendees to sponsors using Claude's reasoning
 """
 
 import json
-from pathlib import Path
+from contextlib import contextmanager
 from mcp.server.fastmcp import FastMCP
+from db.base import SessionLocal
+from db import crud
 
 # Initialize MCP server
 mcp = FastMCP("event-matcher")
 
-# Data directory
-SCRIPT_DIR = Path(__file__).parent
-DATA_DIR = SCRIPT_DIR / "data"
-
-
-def load_json(filename: str) -> list:
-    """Load JSON data from the data directory"""
-    filepath = DATA_DIR / filename
-    if filepath.exists():
-        with open(filepath, "r") as f:
-            return json.load(f)
-    return []
+@contextmanager
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 
 # ============== CORE TOOLS ==============
@@ -30,34 +27,61 @@ def load_json(filename: str) -> list:
 @mcp.tool()
 def get_attendees() -> str:
     """Get all registered attendees for the event."""
-    attendees = load_json("attendees.json")
-    if not attendees:
-        return "No attendees found."
-    return json.dumps(attendees, indent=2)
+    with get_db() as db:
+        attendees = crud.get_attendees(db)
+        if not attendees:
+            return "No attendees found."
+        
+        # Serialize for output
+        data = []
+        for a in attendees:
+            data.append({
+                "full_name": a.name,
+                "email": a.email,
+                "company": a.company,
+                "job_title": a.job_title,
+                "goals": a.goals,
+                "github": a.github_url
+            })
+        return json.dumps(data, indent=2)
 
 
 @mcp.tool()
 def get_sponsors() -> str:
     """Get all sponsors/exhibitors for the event."""
-    sponsors = load_json("sponsors.json")
-    if not sponsors:
-        return "No sponsors found."
-    return json.dumps(sponsors, indent=2)
+    with get_db() as db:
+        sponsors = crud.get_sponsors(db)
+        if not sponsors:
+            return "No sponsors found."
+        
+        # Serialize
+        data = []
+        for s in sponsors:
+            data.append({
+                "sponsor_name": s.name,
+                "company_domain": s.domain,
+                "what_are_they_promoting_at_this_event": s.promoting,
+                "project_or_product_name": s.products,
+                "who_is_attending_from_the_company": s.reps,
+                "event_page_url": s.event_page_url
+            })
+        return json.dumps(data, indent=2)
 
 
 @mcp.tool()
 def get_event_summary() -> str:
     """Get overview of event - attendee count, sponsor count, goals distribution."""
-    attendees = load_json("attendees.json")
-    sponsors = load_json("sponsors.json")
-    
-    summary = {
-        "total_attendees": len(attendees),
-        "total_sponsors": len(sponsors),
-        "attendees": [{"name": a["full_name"], "company": a.get("current_company", "N/A"), "title": a.get("job_title", "N/A")} for a in attendees],
-        "sponsors": [{"name": s["sponsor_name"], "promoting": s.get("what_are_they_promoting_at_this_event", [])} for s in sponsors]
-    }
-    return json.dumps(summary, indent=2)
+    with get_db() as db:
+        attendees = crud.get_attendees(db)
+        sponsors = crud.get_sponsors(db)
+        
+        summary = {
+            "total_attendees": len(attendees),
+            "total_sponsors": len(sponsors),
+            "attendees": [{"name": a.name, "company": a.company or "N/A", "title": a.job_title or "N/A"} for a in attendees],
+            "sponsors": [{"name": s.name, "promoting": s.promoting} for s in sponsors]
+        }
+        return json.dumps(summary, indent=2)
 
 
 # ============== MATCHING TOOLS ==============
@@ -77,24 +101,41 @@ def match_attendee(attendee_name: str) -> str:
         Attendee profile + all sponsors + matching criteria for you to reason through.
         YOU MUST analyze and return top 3 sponsors with scores and reasoning.
     """
-    attendees = load_json("attendees.json")
-    sponsors = load_json("sponsors.json")
-    
-    # Find attendee (case-insensitive partial match)
-    matched = None
-    for a in attendees:
-        if attendee_name.lower() in a.get("full_name", "").lower():
-            matched = a
-            break
-    
-    if not matched:
-        available = [a["full_name"] for a in attendees]
-        return f"No attendee found matching '{attendee_name}'.\n\nAvailable attendees:\n" + "\n".join(f"- {name}" for name in available)
-    
-    result = {
-        "attendee": matched,
-        "all_sponsors": sponsors,
-        "YOUR_TASK": """
+    with get_db() as db:
+        # Find attendee (case-insensitive partial match)
+        all_attendees = crud.get_attendees(db)
+        matched = None
+        for a in all_attendees:
+            if attendee_name.lower() in a.name.lower():
+                matched = a
+                break
+        
+        if not matched:
+            available = [a.name for a in all_attendees]
+            return f"No attendee found matching '{attendee_name}'.\n\nAvailable attendees:\n" + "\n".join(f"- {name}" for name in available)
+        
+        sponsors = crud.get_sponsors(db)
+        
+        # Serialize data for the prompt
+        attendee_data = {
+            "full_name": matched.name,
+            "company": matched.company,
+            "job_title": matched.job_title,
+            "goals": matched.goals
+        }
+        
+        sponsors_data = [{
+            "sponsor_name": s.name,
+            "domain": s.domain,
+            "promoting": s.promoting,
+            "products": s.products,
+            "reps": s.reps
+        } for s in sponsors]
+        
+        result = {
+            "attendee": attendee_data,
+            "all_sponsors": sponsors_data,
+            "YOUR_TASK": """
 ANALYZE THIS ATTENDEE AND RANK THE BEST SPONSORS FOR THEM.
 
 MATCHING CRITERIA (use these in order of importance):
@@ -136,9 +177,9 @@ OUTPUT FORMAT (follow exactly):
 **Talk to:** [Person]  
 **Conversation starter:** "[Opening line]"
 """
-    }
-    
-    return json.dumps(result, indent=2)
+        }
+        
+        return json.dumps(result, indent=2)
 
 
 @mcp.tool()
@@ -152,18 +193,23 @@ def match_all_attendees() -> str:
     Returns:
         All attendees + all sponsors + instructions to generate complete matching report.
     """
-    attendees = load_json("attendees.json")
-    sponsors = load_json("sponsors.json")
-    
-    if not attendees:
-        return "No attendees found."
-    if not sponsors:
-        return "No sponsors found."
-    
-    result = {
-        "all_attendees": attendees,
-        "all_sponsors": sponsors,
-        "YOUR_TASK": """
+    with get_db() as db:
+        attendees = crud.get_attendees(db)
+        sponsors = crud.get_sponsors(db)
+        
+        if not attendees:
+            return "No attendees found."
+        if not sponsors:
+            return "No sponsors found."
+        
+        # Serialize
+        att_data = [{"name": a.name, "title": a.job_title, "company": a.company, "goals": a.goals} for a in attendees]
+        sp_data = [{"name": s.name, "domain": s.domain, "promoting": s.promoting} for s in sponsors]
+        
+        result = {
+            "all_attendees": att_data,
+            "all_sponsors": sp_data,
+            "YOUR_TASK": """
 GENERATE MATCHES FOR EVERY ATTENDEE.
 
 For EACH attendee, provide their top 3 sponsor recommendations.
@@ -193,9 +239,9 @@ OUTPUT FORMAT FOR EACH ATTENDEE:
 
 Generate this for ALL attendees in the list.
 """
-    }
-    
-    return json.dumps(result, indent=2)
+        }
+        
+        return json.dumps(result, indent=2)
 
 
 @mcp.tool()
@@ -212,24 +258,33 @@ def find_attendees_for_sponsor(sponsor_name: str) -> str:
     Returns:
         Sponsor profile + all attendees + instructions to find best matches.
     """
-    attendees = load_json("attendees.json")
-    sponsors = load_json("sponsors.json")
-    
-    # Find sponsor
-    matched = None
-    for s in sponsors:
-        if sponsor_name.lower() in s.get("sponsor_name", "").lower():
-            matched = s
-            break
-    
-    if not matched:
-        available = [s["sponsor_name"] for s in sponsors]
-        return f"No sponsor found matching '{sponsor_name}'.\n\nAvailable sponsors:\n" + "\n".join(f"- {name}" for name in available)
-    
-    result = {
-        "sponsor": matched,
-        "all_attendees": attendees,
-        "YOUR_TASK": """
+    with get_db() as db:
+        sponsors = crud.get_sponsors(db)
+        matched = None
+        for s in sponsors:
+            if sponsor_name.lower() in s.name.lower():
+                matched = s
+                break
+        
+        if not matched:
+            available = [s.name for s in sponsors]
+            return f"No sponsor found matching '{sponsor_name}'.\n\nAvailable sponsors:\n" + "\n".join(f"- {name}" for name in available)
+        
+        attendees = crud.get_attendees(db)
+        
+        # Serialize
+        sponsor_data = {
+            "name": matched.name,
+            "promoting": matched.promoting,
+            "products": matched.products
+        }
+        
+        att_data = [{"name": a.name, "company": a.company, "title": a.job_title, "goals": a.goals} for a in attendees]
+        
+        result = {
+            "sponsor": sponsor_data,
+            "all_attendees": att_data,
+            "YOUR_TASK": """
 FIND THE BEST ATTENDEES FOR THIS SPONSOR TO PRIORITIZE.
 
 Based on what this sponsor is promoting, rank which attendees they should seek out.
@@ -259,9 +314,9 @@ OUTPUT FORMAT:
    - **Why target them:** [2 sentences]
    - **Talking point:** [What to discuss]
 """
-    }
-    
-    return json.dumps(result, indent=2)
+        }
+        
+        return json.dumps(result, indent=2)
 
 
 @mcp.tool()
@@ -277,37 +332,36 @@ def compare_sponsors_for_attendee(attendee_name: str, sponsor1: str, sponsor2: s
         sponsor1: First sponsor to compare
         sponsor2: Second sponsor to compare
     """
-    attendees = load_json("attendees.json")
-    sponsors = load_json("sponsors.json")
-    
-    # Find attendee
-    attendee = None
-    for a in attendees:
-        if attendee_name.lower() in a.get("full_name", "").lower():
-            attendee = a
-            break
-    
-    if not attendee:
-        return f"Attendee '{attendee_name}' not found."
-    
-    # Find sponsors
-    s1, s2 = None, None
-    for s in sponsors:
-        if sponsor1.lower() in s.get("sponsor_name", "").lower():
-            s1 = s
-        if sponsor2.lower() in s.get("sponsor_name", "").lower():
-            s2 = s
-    
-    if not s1:
-        return f"Sponsor '{sponsor1}' not found."
-    if not s2:
-        return f"Sponsor '{sponsor2}' not found."
-    
-    result = {
-        "attendee": attendee,
-        "sponsor_1": s1,
-        "sponsor_2": s2,
-        "YOUR_TASK": """
+    with get_db() as db:
+        attendees = crud.get_attendees(db)
+        
+        attendee = None
+        for a in attendees:
+            if attendee_name.lower() in a.name.lower():
+                attendee = a
+                break
+        
+        if not attendee:
+            return f"Attendee '{attendee_name}' not found."
+        
+        sponsors = crud.get_sponsors(db)
+        s1, s2 = None, None
+        for s in sponsors:
+            if sponsor1.lower() in s.name.lower():
+                s1 = s
+            if sponsor2.lower() in s.name.lower():
+                s2 = s
+        
+        if not s1:
+            return f"Sponsor '{sponsor1}' not found."
+        if not s2:
+            return f"Sponsor '{sponsor2}' not found."
+        
+        result = {
+            "attendee": {"name": attendee.name, "title": attendee.job_title, "company": attendee.company, "goals": attendee.goals},
+            "sponsor_1": {"name": s1.name, "promoting": s1.promoting, "reps": s1.reps},
+            "sponsor_2": {"name": s2.name, "promoting": s2.promoting, "reps": s2.reps},
+            "YOUR_TASK": """
 COMPARE THESE TWO SPONSORS FOR THIS ATTENDEE.
 
 Analyze which sponsor is a better match and why.
@@ -340,9 +394,9 @@ OUTPUT FORMAT:
 **Winner: [Sponsor Name]**
 [2-3 sentence explanation of why this sponsor is the better choice for this attendee]
 """
-    }
-    
-    return json.dumps(result, indent=2)
+        }
+        
+        return json.dumps(result, indent=2)
 
 
 @mcp.tool()
@@ -358,27 +412,23 @@ def add_attendee(full_name: str, email: str, company: str, job_title: str, goals
         goals: Comma-separated goals (e.g., "networking, learn something new, job hunting")
         github: Optional GitHub URL
     """
-    attendees = load_json("attendees.json")
-    
     # Parse goals
     goal_list = [g.strip() for g in goals.split(",")]
     
-    new_attendee = {
+    attendee_data = {
         "full_name": full_name,
         "email": email,
-        "github": github,
-        "linkedin": None,
         "current_company": company,
         "job_title": job_title,
-        "what_are_you_hoping_to_get_from_this_event": goal_list
+        "what_are_you_hoping_to_get_from_this_event": goal_list,
+        "github": github
     }
     
-    attendees.append(new_attendee)
-    
-    # Save
-    filepath = DATA_DIR / "attendees.json"
-    with open(filepath, "w") as f:
-        json.dump(attendees, f, indent=2)
+    with get_db() as db:
+        if crud.get_attendee_by_email(db, email):
+            return f"Error: Attendee with email {email} already exists."
+        
+        crud.create_attendee(db, attendee_data)
     
     return f"Added attendee: {full_name} ({job_title} at {company})\nGoals: {goal_list}"
 
@@ -395,11 +445,8 @@ def add_sponsor(name: str, domain: str, promoting: str, products: str, reps: str
         products: Comma-separated products/projects (e.g., "Claude, API")
         reps: Comma-separated reps attending as "Name:Title" (e.g., "John Doe:CTO, Jane Smith:Engineer")
     """
-    sponsors = load_json("sponsors.json")
-    
     # Parse inputs
     promo_list = [p.strip() for p in promoting.split(",")]
-    product_list = [p.strip() for p in products.split(",")]
     
     rep_list = []
     for rep in reps.split(","):
@@ -407,22 +454,19 @@ def add_sponsor(name: str, domain: str, promoting: str, products: str, reps: str
             name_part, title = rep.strip().split(":", 1)
             rep_list.append({"name": name_part.strip(), "title": title.strip()})
     
-    new_sponsor = {
+    sponsor_data = {
         "sponsor_name": name,
         "company_domain": domain,
         "what_are_they_promoting_at_this_event": promo_list,
-        "project_or_product_name": ", ".join(product_list),
+        "project_or_product_name": products,
         "who_is_attending_from_the_company": rep_list,
         "event_page_url": f"https://event.com/sponsors/{name.lower().replace(' ', '-')}"
     }
     
-    sponsors.append(new_sponsor)
-    
-    # Save
-    filepath = DATA_DIR / "sponsors.json"
-    with open(filepath, "w") as f:
-        json.dump(sponsors, f, indent=2)
-    
+    with get_db() as db:
+        # Check if exists? schema doesn't match on name unique constraint typically but let's assume valid
+        crud.create_sponsor(db, sponsor_data)
+
     return f"Added sponsor: {name}\nDomain: {domain}\nPromoting: {promo_list}\nReps: {rep_list}"
 
 
