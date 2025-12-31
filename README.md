@@ -1,112 +1,158 @@
 # Event Matcher MCP Server
 
-An MCP server that connects Claude Desktop to your event attendee and sponsor data, enabling AI-powered matching and recommendations.
+A Model Context Protocol (MCP) server that connects Claude Desktop to a local event database. It enables AI-powered matching between attendees and sponsors, providing reasoning-based recommendations.
 
-## What This Does
+## 📋 Prerequisites
 
-Claude Desktop accesses a local SQLite database to:
+Before you begin, ensure you have the following installed:
 
-- Semantically match attendees to relevant sponsors
-- Provide reasoning for each recommendation
-- Manage event data (attendees, sponsors, matches) via persistent storage
+- **Python 3.10+**: [Download Python](https://www.python.org/downloads/)
+- **Git**: [Download Git](https://git-scm.com/downloads)
+- **Claude Desktop App**: [Download Claude](https://claude.ai/download)
 
-## Quick Setup
+## 🚀 Installation Guide
 
-### 1. Install Dependencies
+Follow these steps exactly to set up the project on your local machine.
+
+### 1. Clone the Repository
+
+Open your terminal (Command Prompt, PowerShell, or Terminal) and run:
 
 ```bash
+git clone https://github.com/kambleakash0/event-matcher.git
 cd event-matcher
+```
+
+### 2. Set Up a Virtual Environment
+
+It's best practice to use a virtual environment to isolate dependencies.
+
+**macOS / Linux:**
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+**Windows:**
+
+```bash
+python -m venv venv
+venv\Scripts\activate
+```
+
+### 3. Install Dependencies
+
+Install the required Python packages:
+
+```bash
 pip install -r requirements.txt
 ```
 
-### 2. Initialize the Database
+### 4. Initialize the Database
 
-This project uses SQLite with Alembic for migrations. You must initialize the database before running the server.
+This project uses a local SQLite database (`event_matcher.db`). You need to create the tables and load initial data.
 
 ```bash
-# Apply database migrations (creates the tables)
+# Apply database migrations to create tables
 alembic upgrade head
 
-# Seed the database with initial sample data
+# Seed the database with sample data (from data/*.json)
 python seed.py
 ```
 
-### 3. Configure Claude Desktop
+*Note: If you see "Seeding complete!", your database is ready.*
 
-Find your Claude Desktop config file:
+## ⚙️ Configuration
 
-- **Mac**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+You need to tell Claude Desktop where to find this server.
 
-Add this to your config (update the path to point to your virtual environment python and the server script):
+1. **Locate your config file**:
+    - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+    - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
 
-```json
-{
-  "mcpServers": {
-    "event-matcher": {
-      "command": "/ABSOLUTE/PATH/TO/.../bin/python",
-      "args": ["/ABSOLUTE/PATH/TO/.../server.py"]
+2. **Edit the file**: Open it in a text editor (like VS Code or Notepad) and add the `event-matcher` entry.
+
+    **⚠️ IMPORTANT**: You must use **ABSOLUTE paths** to your Python executable and the `server.py` file.
+
+    To find your absolute python path inside the venv:
+    - macOS/Linux: `which python`
+    - Windows: `where python`
+
+    To find your project path:
+    - macOS/Linux: `pwd`
+    - Windows: `cd`
+
+    **Config Example:**
+
+    ```json
+    {
+      "mcpServers": {
+        "event-matcher": {
+          "command": "/Users/yourname/github/event-matcher/venv/bin/python",
+          "args": ["/Users/yourname/github/event-matcher/server.py"]
+        }
+      }
     }
-  }
-}
-```
+    ```
 
-### 4. Restart Claude Desktop
+3. **Restart Claude Desktop**: Completely quit the application and open it again.
 
-Close and reopen Claude Desktop. You should see the MCP tools available.
+## 💡 Usage
 
----
+Once connected, you can ask Claude questions like:
 
-## Available Tools
+- "Who are the attendees?"
+- "Recommend sponsors for Michael Chen."
+- "I'm a sponsor from Nvidia, who should I talk to?"
+- "Compare Google vs Meta for a research student."
+
+### Available Tools
 
 | Tool | Description |
 | ------ | ------------- |
-| `get_attendees()` | Returns all attendee profiles from DB |
-| `get_sponsors()` | Returns all sponsor information from DB |
-| `match_attendee(name)` | AI analysis of best sponsors for an attendee |
-| `find_attendees_for_sponsor(name)` | AI analysis of best targets for a sponsor |
-| `add_attendee(...)` | Add a new attendee to the database |
-| `add_sponsor(...)` | Add a new sponsor to the database |
+| `get_attendees()` | List all attendees |
+| `get_sponsors()` | List all sponsors |
+| `match_attendee(name)` | AI recommendation of sponsors for a specific attendee |
+| `find_attendees_for_sponsor(name)` | AI recommendation of attendees for a specific sponsor |
+| `add_attendee(...)` | Register a new attendee |
+| `add_sponsor(...)` | Register a new sponsor |
 
----
+## 🛠 Development
 
-## Development
+### File Structure
 
-### Project Structure
-
-- `db/`: Database models (SQLAlchemy) and CRUD operations
-- `alembic/`: Database migration scripts
-- `tests/`: Pytest suite
-- `server.py`: MCP server entry point
-- `seed.py`: Script to populate DB with initial data
+- `server.py`: Main entry point for the MCP server.
+- `db/`: Database layer (Models and CRUD).
+- `alembic/`: Migration scripts for database schema changes.
+- `tests/`: Automated tests.
 
 ### Running Tests
+
+To ensure everything is working correctly:
 
 ```bash
 pytest
 ```
 
-### Database Management
+### Making Schema Changes
 
-If you modify `db/models.py`, generate a new migration:
+If you modify `db/models.py`, update the database:
 
 ```bash
-alembic revision --autogenerate -m "description of change"
+alembic revision --autogenerate -m "Describe your change"
 alembic upgrade head
 ```
 
----
+## ❓ Troubleshooting
 
-## Troubleshooting
+### "Unable to open database file"
 
-### "unable to open database file"
+- Ensure `db/base.py` uses an absolute path for the SQLite DB.
+- Check permissions on the `event_matcher.db` file.
 
-- Ensure `db/base.py` is using an absolute path for `DATABASE_URL`.
-- Restart Claude Desktop to pick up code changes.
+### Claude says "No tools available"
 
-### MCP not connecting?
-
-- Check the absolute paths in your config.
-- Ensure you ran `alembic upgrade head`.
-
----
+- Check the logs: `tail -f ~/Library/Logs/Claude/mcp.log` (macOS).
+- Verify the paths in `claude_desktop_config.json` are correct and absolute.
+- Ensure you activated the virtual environment before getting the python path.
