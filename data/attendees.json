@@ -6,7 +6,10 @@
     "linkedin": null,
     "current_company": "Google",
     "job_title": "Machine Learning Engineer",
-    "what_are_you_hoping_to_get_from_this_event": ["networking", "learn something new"]
+    "what_are_you_hoping_to_get_from_this_event": [
+      "networking",
+      "learn something new"
+    ]
   },
   {
     "full_name": "Michael Chen",
@@ -15,7 +18,9 @@
     "linkedin": null,
     "current_company": "UC San Diego",
     "job_title": "PhD Student - Computer Vision",
-    "what_are_you_hoping_to_get_from_this_event": ["learn something new"]
+    "what_are_you_hoping_to_get_from_this_event": [
+      "learn something new"
+    ]
   },
   {
     "full_name": "Jessica Martinez",
@@ -24,7 +29,10 @@
     "linkedin": null,
     "current_company": "DataFlow AI",
     "job_title": "Founding Engineer",
-    "what_are_you_hoping_to_get_from_this_event": ["grow business opportunities", "networking"]
+    "what_are_you_hoping_to_get_from_this_event": [
+      "grow business opportunities",
+      "networking"
+    ]
   },
   {
     "full_name": "David Kim",
@@ -33,7 +41,10 @@
     "linkedin": null,
     "current_company": "Freelance",
     "job_title": "ML Consultant",
-    "what_are_you_hoping_to_get_from_this_event": ["job hunting", "networking"]
+    "what_are_you_hoping_to_get_from_this_event": [
+      "job hunting",
+      "networking"
+    ]
   },
   {
     "full_name": "Emily Zhang",
@@ -42,8 +53,11 @@
     "linkedin": null,
     "current_company": "Meta",
     "job_title": "Senior Research Scientist",
-    "what_are_you_hoping_to_get_from_this_event": ["learn something new", "networking"]
-  }, 
+    "what_are_you_hoping_to_get_from_this_event": [
+      "learn something new",
+      "networking"
+    ]
+  },
   {
     "full_name": "Dave Johnson",
     "email": "dave.johnson@aialliance.org",
@@ -70,6 +84,4 @@
       "job hunting"
     ]
   }
-  
-  
 ]
