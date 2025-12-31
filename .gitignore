@@ -171,3 +171,6 @@ pyrightconfig.json
 
 # Custom
 .DS_Store
+
+# Persistence
+event_matcher.db

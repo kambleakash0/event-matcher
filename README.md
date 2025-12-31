@@ -1,181 +1,158 @@
 # Event Matcher MCP Server
 
-An MCP server that connects Claude Desktop to your event attendee and sponsor data, enabling AI-powered matching and recommendations.
+A Model Context Protocol (MCP) server that connects Claude Desktop to a local event database. It enables AI-powered matching between attendees and sponsors, providing reasoning-based recommendations.
 
-## What This Does
+## 📋 Prerequisites
 
-Claude Desktop reads your attendee and sponsor data, then:
-- Semantically matches attendees to relevant sponsors
-- Provides reasoning for each recommendation
-- Considers job titles, goals, company backgrounds, and sponsor offerings
+Before you begin, ensure you have the following installed:
 
-## Quick Setup
+- **Python 3.10+**: [Download Python](https://www.python.org/downloads/)
+- **Git**: [Download Git](https://git-scm.com/downloads)
+- **Claude Desktop App**: [Download Claude](https://claude.ai/download)
 
-### 1. Install Dependencies
+## 🚀 Installation Guide
+
+Follow these steps exactly to set up the project on your local machine.
+
+### 1. Clone the Repository
+
+Open your terminal (Command Prompt, PowerShell, or Terminal) and run:
 
 ```bash
+git clone https://github.com/kambleakash0/event-matcher.git
 cd event-matcher
+```
+
+### 2. Set Up a Virtual Environment
+
+It's best practice to use a virtual environment to isolate dependencies.
+
+**macOS / Linux:**
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+**Windows:**
+
+```bash
+python -m venv venv
+venv\Scripts\activate
+```
+
+### 3. Install Dependencies
+
+Install the required Python packages:
+
+```bash
 pip install -r requirements.txt
 ```
 
-### 2. Configure Claude Desktop
+### 4. Initialize the Database
 
-Find your Claude Desktop config file:
-- **Mac**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+This project uses a local SQLite database (`event_matcher.db`). You need to create the tables and load initial data.
 
-Add this to your config (update the path!):
+```bash
+# Apply database migrations to create tables
+alembic upgrade head
 
-```json
-{
-  "mcpServers": {
-    "event-matcher": {
-      "command": "python",
-      "args": ["/Users/anmolpatil/Downloads/event-matcher/server.py"]
-    }
-  }
-}
+# Seed the database with sample data (from data/*.json)
+python seed.py
 ```
 
-### 3. Restart Claude Desktop
+*Note: If you see "Seeding complete!", your database is ready.*
 
-Close and reopen Claude Desktop. You should see the MCP tools available.
+## ⚙️ Configuration
 
----
+You need to tell Claude Desktop where to find this server.
 
-## Available Tools
+1. **Locate your config file**:
+    - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+    - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+
+2. **Edit the file**: Open it in a text editor (like VS Code or Notepad) and add the `event-matcher` entry.
+
+    **⚠️ IMPORTANT**: You must use **ABSOLUTE paths** to your Python executable and the `server.py` file.
+
+    To find your absolute python path inside the venv:
+    - macOS/Linux: `which python`
+    - Windows: `where python`
+
+    To find your project path:
+    - macOS/Linux: `pwd`
+    - Windows: `cd`
+
+    **Config Example:**
+
+    ```json
+    {
+      "mcpServers": {
+        "event-matcher": {
+          "command": "/Users/yourname/github/event-matcher/venv/bin/python",
+          "args": ["/Users/yourname/github/event-matcher/server.py"]
+        }
+      }
+    }
+    ```
+
+3. **Restart Claude Desktop**: Completely quit the application and open it again.
+
+## 💡 Usage
+
+Once connected, you can ask Claude questions like:
+
+- "Who are the attendees?"
+- "Recommend sponsors for Michael Chen."
+- "I'm a sponsor from Nvidia, who should I talk to?"
+- "Compare Google vs Meta for a research student."
+
+### Available Tools
 
 | Tool | Description |
-|------|-------------|
-| `get_attendees()` | Returns all attendee profiles |
-| `get_sponsors()` | Returns all sponsor information |
-| `get_attendee_by_name(name)` | Search for specific attendee |
-| `get_sponsor_by_name(name)` | Search for specific sponsor |
-| `get_event_summary()` | Overview of event stats |
+| ------ | ------------- |
+| `get_attendees()` | List all attendees |
+| `get_sponsors()` | List all sponsors |
+| `match_attendee(name)` | AI recommendation of sponsors for a specific attendee |
+| `find_attendees_for_sponsor(name)` | AI recommendation of attendees for a specific sponsor |
+| `add_attendee(...)` | Register a new attendee |
+| `add_sponsor(...)` | Register a new sponsor |
 
----
+## 🛠 Development
 
-## Example Prompts for Claude Desktop
+### File Structure
 
-### Generate All Matches
+- `server.py`: Main entry point for the MCP server.
+- `db/`: Database layer (Models and CRUD).
+- `alembic/`: Migration scripts for database schema changes.
+- `tests/`: Automated tests.
 
-```
-Look at all the attendees and sponsors for this event. 
-For each attendee, recommend their top 3 sponsors to visit.
+### Running Tests
 
-For each recommendation, explain:
-1. Why this sponsor is relevant to them
-2. Who they should talk to at the booth
-3. What specifically they should ask about
+To ensure everything is working correctly:
 
-Format as a clear report I can send to attendees.
-```
-
-### Match a Specific Attendee
-
-```
-Get the profile for Michael Chen and recommend which sponsors 
-he should visit. He's a PhD student, so focus on research 
-opportunities and learning.
+```bash
+pytest
 ```
 
-### Sponsor Perspective
+### Making Schema Changes
 
-```
-I'm from Nvidia. Look at the attendee list and tell me which 
-attendees I should prioritize talking to, and what topics 
-would resonate with each of them.
-```
+If you modify `db/models.py`, update the database:
 
-### Event Overview
-
-```
-Give me a summary of this event - who's attending, what they're 
-looking for, and which sponsors are best positioned to meet 
-attendee needs. Flag any gaps.
+```bash
+alembic revision --autogenerate -m "Describe your change"
+alembic upgrade head
 ```
 
-### Generate Personalized Emails
+## ❓ Troubleshooting
 
-```
-For each attendee, draft a short personalized email (3-4 sentences) 
-with their top sponsor recommendations. Keep it friendly and specific.
-```
+### "Unable to open database file"
 
----
+- Ensure `db/base.py` uses an absolute path for the SQLite DB.
+- Check permissions on the `event_matcher.db` file.
 
-## Customizing Your Data
+### Claude says "No tools available"
 
-### Add More Attendees
-
-Edit `data/attendees.json`:
-
-```json
-{
-  "full_name": "New Person",
-  "email": "email@example.com",
-  "github": "https://github.com/username",
-  "linkedin": null,
-  "current_company": "Company Name",
-  "job_title": "Their Title",
-  "what_are_you_hoping_to_get_from_this_event": ["networking", "learn something new"]
-}
-```
-
-### Add More Sponsors
-
-Edit `data/sponsors.json`:
-
-```json
-{
-  "sponsor_name": "Company Name",
-  "company_domain": "What they do",
-  "what_are_they_promoting_at_this_event": ["product", "hiring", "research"],
-  "project_or_product_name": "Specific products/projects",
-  "who_is_attending_from_the_company": [
-    {"name": "Person Name", "title": "Their Title"}
-  ],
-  "event_page_url": "https://example.com/booth"
-}
-```
-
----
-
-## How Claude Does the Matching
-
-Claude uses semantic understanding to match based on:
-
-| Attendee Signal | Matched To |
-|-----------------|------------|
-| "PhD Student" | Research-focused sponsors |
-| "job hunting" | Sponsors promoting "hiring" |
-| "grow business" | Product/enterprise sponsors |
-| "learn something new" | Open-source, research sponsors |
-| Senior job title | Connect with senior sponsor reps |
-
-No explicit rules needed—Claude understands these relationships naturally.
-
----
-
-## Next Steps (Future Improvements)
-
-1. **Connect to Luma API** - Auto-pull registration data
-2. **GitHub scraping** - Enrich profiles with repo data  
-3. **Feedback loop** - Collect "was this helpful?" to improve
-4. **Meeting scheduling** - Add calendar integration
-
----
-
-## Troubleshooting
-
-**MCP not connecting?**
-- Check the path in your config is absolute (full path)
-- Make sure Python is in your PATH
-- Restart Claude Desktop completely
-
-**No data showing?**
-- Verify `data/attendees.json` and `data/sponsors.json` exist
-- Check JSON is valid (no trailing commas)
-
-**Need help?**
-Just ask Claude to debug: "Can you check if the event-matcher MCP is working? Try getting the event summary."
+- Check the logs: `tail -f ~/Library/Logs/Claude/mcp.log` (macOS).
+- Verify the paths in `claude_desktop_config.json` are correct and absolute.
+- Ensure you activated the virtual environment before getting the python path.
