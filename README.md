@@ -117,6 +117,20 @@ Once connected, you can ask Claude questions like:
 | `find_attendees_for_sponsor(name)` | AI recommendation of attendees for a specific sponsor |
 | `add_attendee(...)` | Register a new attendee |
 | `add_sponsor(...)` | Register a new sponsor |
+| `import_data_from_file(...)` | Bulk import attendees/sponsors from Excel/CSV |
+
+### Bulk Data Import
+
+You can upload Excel (.xlsx) or CSV files to add multiple attendees or sponsors at once.
+
+**Usage in Claude:**
+> "Import attendees from /Users/me/data/new_attendees.xlsx"
+
+**File Formats:**
+Examples are in `data/templates/`.
+
+- **Attendees**: Name, Email, Company, Title, Goals, Github
+- **Sponsors**: Name, Domain, Promoting, Products, Reps, Website
 
 ## 🛠 Development
 
