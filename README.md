@@ -121,7 +121,7 @@ Once connected, you can ask Claude questions like:
 
 ### Bulk Data Import
 
-You can upload Excel (.xlsx) or CSV files to add multiple attendees or sponsors at once.
+You can use Claude to import Excel (.xlsx) or CSV files to add multiple attendees or sponsors at once.
 
 **Usage in Claude:**
 > "Import attendees from /Users/me/data/new_attendees.xlsx"
