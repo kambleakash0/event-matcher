@@ -1,5 +1,6 @@
 from pathlib import Path
 from sqlalchemy import create_engine
+from contextlib import contextmanager
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 # 1. Get the absolute path of the project root
@@ -13,15 +14,14 @@ DB_PATH = BASE_DIR / "event_matcher.db"
 # Note: SQLite needs 4 slashes for absolute paths on Mac/Linux (sqlite:////path)
 DATABASE_URL = f"sqlite:///{DB_PATH}"
 
-engine = create_engine(
-    DATABASE_URL, 
-    connect_args={"check_same_thread": False}
-)
+engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
 
+
+@contextmanager
 def get_db():
     db = SessionLocal()
     try:
