@@ -65,9 +65,9 @@ function AdminDashboard() {
           <button className="nav-item" onClick={() => setShowAddEvent(true)}>
             <span>➕</span> Add Event
           </button>
-          <a href="/upload" className="nav-item">
+          {/* <a href="/upload" className="nav-item">
             <span>📤</span> Upload Data
-          </a>
+          </a> */}
         </nav>
 
         <div className="sidebar-footer">

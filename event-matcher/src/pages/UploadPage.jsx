@@ -2,45 +2,146 @@ import { useState } from 'react';
 import { collection, addDoc, writeBatch, doc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { useNavigate } from 'react-router-dom';
+import Papa from 'papaparse';
 import './UploadPage.css';
 
 function UploadPage() {
+  const [eventUrl, setEventUrl] = useState('');
   const [eventName, setEventName] = useState('');
   const [eventDate, setEventDate] = useState('');
-  const [attendeesJson, setAttendeesJson] = useState('');
-  const [sponsorsJson, setSponsorsJson] = useState('');
+  const [eventDescription, setEventDescription] = useState('');
+  const [eventLocation, setEventLocation] = useState('');
+  const [fetchingEvent, setFetchingEvent] = useState(false);
+  const [eventFetched, setEventFetched] = useState(false);
+  
+  const [attendeesData, setAttendeesData] = useState([]);
+  const [sponsorsData, setSponsorsData] = useState([]);
+  const [attendeesFileName, setAttendeesFileName] = useState('');
+  const [sponsorsFileName, setSponsorsFileName] = useState('');
+  
   const [status, setStatus] = useState({ type: '', message: '' });
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const validateJson = (jsonString, type) => {
-    if (!jsonString.trim()) {
-      return { valid: false, error: `${type} JSON is required` };
+  // Fetch event details from URL (Meetup, Eventbrite, etc.)
+  const fetchEventDetails = async () => {
+    if (!eventUrl.trim()) {
+      setStatus({ type: 'error', message: 'Please enter an event URL' });
+      return;
     }
+
+    setFetchingEvent(true);
+    setStatus({ type: '', message: '' });
+
     try {
-      const parsed = JSON.parse(jsonString);
-      if (!Array.isArray(parsed)) {
-        return { valid: false, error: `${type} must be an array` };
+      // This is a mock implementation - you'll need to implement the actual fetching logic
+      // Options:
+      // 1. Use a backend proxy to scrape the page
+      // 2. Use APIs from Meetup, Eventbrite if available
+      // 3. Use a third-party service like Diffbot
+      
+      // For now, we'll simulate an API call
+      const response = await fetch('/api/fetch-event-details', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: eventUrl })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch event details');
       }
-      return { valid: true, data: parsed };
-    } catch (err) {
-      return { valid: false, error: `Invalid ${type} JSON` };
+
+      const eventData = await response.json();
+      
+      setEventName(eventData.name || '');
+      setEventDate(eventData.date || '');
+      setEventDescription(eventData.description || '');
+      setEventLocation(eventData.location || '');
+      setEventFetched(true);
+      setStatus({ type: 'success', message: 'Event details fetched successfully!' });
+
+    } catch (error) {
+      console.error('Error fetching event:', error);
+      // If the API doesn't exist yet, allow manual entry
+      setStatus({ 
+        type: 'warning', 
+        message: 'Could not auto-fetch event details. Please enter manually below.' 
+      });
+      setEventFetched(true); // Allow manual entry
+    } finally {
+      setFetchingEvent(false);
     }
+  };
+
+  // Handle CSV file upload for attendees
+  const handleAttendeesUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setAttendeesFileName(file.name);
+    setStatus({ type: '', message: '' });
+
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        if (results.data.length === 0) {
+          setStatus({ type: 'error', message: 'Attendees CSV is empty' });
+          return;
+        }
+        setAttendeesData(results.data);
+        setStatus({ type: 'success', message: `Loaded ${results.data.length} attendees` });
+      },
+      error: (error) => {
+        console.error('CSV parsing error:', error);
+        setStatus({ type: 'error', message: 'Failed to parse attendees CSV' });
+      }
+    });
+  };
+
+  // Handle CSV file upload for sponsors
+  const handleSponsorsUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setSponsorsFileName(file.name);
+    setStatus({ type: '', message: '' });
+
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        if (results.data.length === 0) {
+          setStatus({ type: 'error', message: 'Sponsors CSV is empty' });
+          return;
+        }
+        setSponsorsData(results.data);
+        setStatus({ type: 'success', message: `Loaded ${results.data.length} sponsors` });
+      },
+      error: (error) => {
+        console.error('CSV parsing error:', error);
+        setStatus({ type: 'error', message: 'Failed to parse sponsors CSV' });
+      }
+    });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setStatus({ type: '', message: '' });
 
-    const attendeesResult = validateJson(attendeesJson, 'Attendees');
-    if (!attendeesResult.valid) {
-      setStatus({ type: 'error', message: attendeesResult.error });
+    // Validation
+    if (!eventName || !eventDate) {
+      setStatus({ type: 'error', message: 'Event name and date are required' });
       return;
     }
 
-    const sponsorsResult = validateJson(sponsorsJson, 'Sponsors');
-    if (!sponsorsResult.valid) {
-      setStatus({ type: 'error', message: sponsorsResult.error });
+    if (attendeesData.length === 0) {
+      setStatus({ type: 'error', message: 'Please upload attendees CSV file' });
+      return;
+    }
+
+    if (sponsorsData.length === 0) {
+      setStatus({ type: 'error', message: 'Please upload sponsors CSV file' });
       return;
     }
 
@@ -51,9 +152,12 @@ function UploadPage() {
       const eventRef = await addDoc(collection(db, 'events'), {
         name: eventName,
         date: eventDate,
+        description: eventDescription || '',
+        location: eventLocation || '',
+        sourceUrl: eventUrl || '',
         status: 'upcoming',
-        attendeeCount: attendeesResult.data.length,
-        sponsorCount: sponsorsResult.data.length,
+        attendeeCount: attendeesData.length,
+        sponsorCount: sponsorsData.length,
         createdAt: new Date()
       });
 
@@ -62,31 +166,33 @@ function UploadPage() {
       // 2. Batch write attendees + sponsors
       const batch = writeBatch(db);
 
-      attendeesResult.data.forEach((attendee) => {
+      // Add attendees
+      attendeesData.forEach((attendee) => {
         const ref = doc(collection(db, 'attendees'));
         batch.set(ref, {
           eventId,
-          name: attendee.full_name,
-          email: attendee.email,
-          githubUrl: attendee.github || null,
-          linkedIn: attendee.linkedin || null,
-          company: attendee.current_company,
-          jobTitle: attendee.job_title,
-          intent: attendee.what_are_you_hoping_to_get_from_this_event || [],
+          name: attendee.full_name || attendee.name || '',
+          email: attendee.email || '',
+          githubUrl: attendee.github || attendee.github_url || null,
+          linkedIn: attendee.linkedin || attendee.linkedin_url || null,
+          company: attendee.current_company || attendee.company || '',
+          jobTitle: attendee.job_title || attendee.title || '',
+          intent: parseArrayField(attendee.what_are_you_hoping_to_get_from_this_event || attendee.intent || ''),
           createdAt: new Date()
         });
       });
 
-      sponsorsResult.data.forEach((sponsor) => {
+      // Add sponsors
+      sponsorsData.forEach((sponsor) => {
         const ref = doc(collection(db, 'sponsors'));
         batch.set(ref, {
           eventId,
-          companyName: sponsor.sponsor_name,
-          domain: sponsor.company_domain,
-          promotionType: sponsor.what_are_they_promoting_at_this_event || [],
-          projectName: sponsor.project_or_product_name,
-          attendingTeam: sponsor.who_is_attending_from_the_company || [],
-          eventPageUrl: sponsor.event_page_url || null,
+          companyName: sponsor.sponsor_name || sponsor.company_name || '',
+          domain: sponsor.company_domain || sponsor.domain || '',
+          promotionType: parseArrayField(sponsor.what_are_they_promoting_at_this_event || sponsor.promotion || ''),
+          projectName: sponsor.project_or_product_name || sponsor.project_name || '',
+          attendingTeam: parseArrayField(sponsor.who_is_attending_from_the_company || sponsor.team || ''),
+          eventPageUrl: sponsor.event_page_url || sponsor.page_url || null,
           createdAt: new Date()
         });
       });
@@ -95,32 +201,34 @@ function UploadPage() {
 
       setStatus({ 
         type: 'success', 
-        message: `Event created with ${attendeesResult.data.length} attendees and ${sponsorsResult.data.length} sponsors.`
+        message: `Event created with ${attendeesData.length} attendees and ${sponsorsData.length} sponsors!`
       });
 
+      // Redirect after 2 seconds
       setTimeout(() => navigate('/admin/dashboard'), 2000);
 
     } catch (error) {
-      console.error('Error:', error);
-      setStatus({ type: 'error', message: error.message });
+      console.error('Error creating event:', error);
+      setStatus({ type: 'error', message: `Error: ${error.message}` });
     } finally {
       setLoading(false);
     }
   };
 
-  const getJsonStatus = (jsonString) => {
-    if (!jsonString.trim()) return null;
+  // Helper function to parse array fields from CSV
+  const parseArrayField = (field) => {
+    if (!field) return [];
+    if (Array.isArray(field)) return field;
+    
+    // Try to parse as JSON array
     try {
-      const parsed = JSON.parse(jsonString);
-      if (Array.isArray(parsed)) return { valid: true, count: parsed.length };
-      return { valid: false };
+      const parsed = JSON.parse(field);
+      return Array.isArray(parsed) ? parsed : [field];
     } catch {
-      return { valid: false };
+      // If not JSON, split by common delimiters
+      return field.split(/[,;|]/).map(s => s.trim()).filter(Boolean);
     }
   };
-
-  const attendeesStatus = getJsonStatus(attendeesJson);
-  const sponsorsStatus = getJsonStatus(sponsorsJson);
 
   return (
     <div className="upload-container">
@@ -142,16 +250,45 @@ function UploadPage() {
       <main className="upload-main">
         <div className="upload-header">
           <h1>Create New Event</h1>
-          <p>Add event details and paste attendee/sponsor data in JSON format</p>
+          <p>Fetch event details from a URL and upload attendee/sponsor data via CSV</p>
         </div>
 
         <form onSubmit={handleSubmit} className="upload-form">
           {status.message && (
             <div className={`status-message ${status.type}`}>
-              {status.type === 'success' ? '✓' : '✗'} {status.message}
+              {status.type === 'success' ? '✓' : status.type === 'error' ? '✗' : '⚠'} {status.message}
             </div>
           )}
 
+          {/* Event URL Section */}
+          <div className="form-section">
+            <h2>Event Source</h2>
+            <p className="section-description">
+              Paste a link from Meetup, Eventbrite, or other event platforms to auto-populate event details
+            </p>
+            <div className="url-input-group">
+              <div className="form-group" style={{ flex: 1 }}>
+                <label>Event URL</label>
+                <input
+                  type="url"
+                  value={eventUrl}
+                  onChange={(e) => setEventUrl(e.target.value)}
+                  placeholder="https://www.meetup.com/your-event-link"
+                  disabled={eventFetched}
+                />
+              </div>
+              <button 
+                type="button"
+                onClick={fetchEventDetails}
+                className="btn-fetch"
+                disabled={fetchingEvent || eventFetched}
+              >
+                {fetchingEvent ? 'Fetching...' : eventFetched ? 'Fetched ✓' : 'Fetch Details'}
+              </button>
+            </div>
+          </div>
+
+          {/* Event Details Section */}
           <div className="form-section">
             <h2>Event Details</h2>
             <div className="form-row">
@@ -175,62 +312,100 @@ function UploadPage() {
                 />
               </div>
             </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Location</label>
+                <input
+                  type="text"
+                  value={eventLocation}
+                  onChange={(e) => setEventLocation(e.target.value)}
+                  placeholder="San Francisco, CA"
+                />
+              </div>
+            </div>
+            <div className="form-group">
+              <label>Description</label>
+              <textarea
+                value={eventDescription}
+                onChange={(e) => setEventDescription(e.target.value)}
+                placeholder="Event description..."
+                rows={3}
+              />
+            </div>
           </div>
 
+          {/* Attendees CSV Upload Section */}
           <div className="form-section">
             <div className="section-header">
               <h2>Attendees Data</h2>
-              {attendeesStatus && (
-                <span className={`json-status ${attendeesStatus.valid ? 'valid' : 'invalid'}`}>
-                  {attendeesStatus.valid ? `✓ ${attendeesStatus.count} attendees` : '✗ Invalid JSON'}
+              {attendeesData.length > 0 && (
+                <span className="csv-status valid">
+                  ✓ {attendeesData.length} attendees loaded
                 </span>
               )}
             </div>
+            <p className="section-description">
+              Upload a CSV file with attendee information (columns: full_name, email, github, linkedin, current_company, job_title, etc.)
+            </p>
             <div className="form-group">
-              <label>Paste Attendees JSON *</label>
-              <textarea
-                value={attendeesJson}
-                onChange={(e) => setAttendeesJson(e.target.value)}
-                placeholder='[{"full_name": "John", "email": "john@example.com", ...}]'
-                rows={10}
-                className={attendeesStatus ? (attendeesStatus.valid ? 'valid' : 'invalid') : ''}
+              <label htmlFor="attendees-upload" className="file-upload-label">
+                <span className="upload-icon">📄</span>
+                <span>{attendeesFileName || 'Choose CSV File'}</span>
+              </label>
+              <input
+                id="attendees-upload"
+                type="file"
+                accept=".csv"
+                onChange={handleAttendeesUpload}
+                className="file-input"
                 required
               />
             </div>
           </div>
 
+          {/* Sponsors CSV Upload Section */}
           <div className="form-section">
             <div className="section-header">
               <h2>Sponsors Data</h2>
-              {sponsorsStatus && (
-                <span className={`json-status ${sponsorsStatus.valid ? 'valid' : 'invalid'}`}>
-                  {sponsorsStatus.valid ? `✓ ${sponsorsStatus.count} sponsors` : '✗ Invalid JSON'}
+              {sponsorsData.length > 0 && (
+                <span className="csv-status valid">
+                  ✓ {sponsorsData.length} sponsors loaded
                 </span>
               )}
             </div>
+            <p className="section-description">
+              Upload a CSV file with sponsor information (columns: sponsor_name, company_domain, project_or_product_name, etc.)
+            </p>
             <div className="form-group">
-              <label>Paste Sponsors JSON *</label>
-              <textarea
-                value={sponsorsJson}
-                onChange={(e) => setSponsorsJson(e.target.value)}
-                placeholder='[{"sponsor_name": "TechCorp", "company_domain": "AI", ...}]'
-                rows={10}
-                className={sponsorsStatus ? (sponsorsStatus.valid ? 'valid' : 'invalid') : ''}
+              <label htmlFor="sponsors-upload" className="file-upload-label">
+                <span className="upload-icon">📄</span>
+                <span>{sponsorsFileName || 'Choose CSV File'}</span>
+              </label>
+              <input
+                id="sponsors-upload"
+                type="file"
+                accept=".csv"
+                onChange={handleSponsorsUpload}
+                className="file-input"
                 required
               />
             </div>
           </div>
 
           <div className="form-actions">
-            <button type="button" className="btn-secondary" onClick={() => navigate('/admin/dashboard')}>
+            <button 
+              type="button" 
+              className="btn-secondary" 
+              onClick={() => navigate('/admin/dashboard')}
+            >
               Cancel
             </button>
             <button 
               type="submit" 
               className="btn-primary"
-              disabled={loading || !attendeesStatus?.valid || !sponsorsStatus?.valid}
+              disabled={loading || attendeesData.length === 0 || sponsorsData.length === 0}
             >
-              {loading ? 'Creating...' : 'Create Event'}
+              {loading ? 'Creating Event...' : 'Create Event'}
             </button>
           </div>
         </form>

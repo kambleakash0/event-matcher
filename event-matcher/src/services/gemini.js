@@ -1,8 +1,17 @@
-// API Keys
-const GEMINI_KEY = "AIzaSyBzL3Zfj7ZaSSM2jAmwVT5CK4FYQ8mV1K4";
-const OPENROUTER_KEY = "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";
+/**
+ * HYBRID GEMINI.JS - Agentic + Fallback
+ * Uses agentic system by default, falls back to monolithic if it fails
+ */
 
-// Models to try in order
+// Import agentic system
+// import { runAgenticMatching } from './agenticMatchingOrchestrator_openrouter.js';
+import { runAgenticMatching } from './agenticMatchingOrchestrator_openrouter.js';
+
+// API Keys (keep your existing ones)
+const GEMINI_KEY = "AIzaSyDsPPYRL6unbYOq8mxaTdgPUt7b_KVzGH4";
+const OPENROUTER_KEY = "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";
+
+// Models to try in order (fallback)
 const PROVIDERS = [
   {
     name: "Gemini 2.0 Flash",
@@ -34,7 +43,32 @@ const PROVIDERS = [
   }
 ];
 
+/**
+ * Main matching function - tries agentic first, falls back to monolithic
+ */
 export async function runMatching(attendee, sponsors, event) {
+  console.log("🚀 Starting matching system...");
+  
+  try {
+    // TRY AGENTIC SYSTEM FIRST
+    console.log("🤖 Attempting agentic matching...");
+    const result = await runAgenticMatching(attendee, sponsors, event);
+    console.log("✅ Agentic matching succeeded!");
+    return result;
+    
+  } catch (agenticError) {
+    // FALLBACK TO MONOLITHIC
+    console.warn("⚠️ Agentic matching failed, using fallback:", agenticError.message);
+    console.log("🔄 Falling back to monolithic LLM approach...");
+    
+    return await runMonolithicMatching(attendee, sponsors, event);
+  }
+}
+
+/**
+ * Original monolithic matching (your current approach)
+ */
+async function runMonolithicMatching(attendee, sponsors, event) {
   const prompt = buildPrompt(attendee, sponsors, event);
   
   let lastError = null;
@@ -44,7 +78,6 @@ export async function runMatching(attendee, sponsors, event) {
       console.log(`Trying: ${provider.name}...`);
       const text = await provider.call(prompt);
       console.log(`✓ Success: ${provider.name}`);
-      console.log(`✓ Success: ${text}`);
       return parseResponse(text);
     } catch (error) {
       console.warn(`✗ ${provider.name} failed:`, error.message);
@@ -178,18 +211,14 @@ function buildPrompt(attendee, sponsors, event) {
   - Pro tips should be specific to their goal type
   - Include 3-4 sponsor matches maximum, quality over quantity
   - Be warm and encouraging in tone`;
-  }
-// ```
+}
 
-// ---
-
-// ## Fallback Order Now
-// We use ML layer first -> Currently Rule based clasiffication 
-// ```
-// 1. Gemini 2.0 Flash (direct)
-// 2. Gemini 1.5 Flash (direct)
-// 3. OpenRouter → GPT-4o-mini
-// 4. OpenRouter → GPT-4o
-// 5. OpenRouter → Claude 3.5 Sonnet
-// 6. OpenRouter → Gemini 2.0
-// 7. OpenRouter → Llama 3.3 70B
+/**
+ * Export for compatibility
+ */
+export function getMatchExplanation(matchScore, scoreBreakdown) {
+  if (matchScore > 85) return "Strong match based on goals and background";
+  if (matchScore > 70) return "Good match with relevant opportunities";
+  if (matchScore > 50) return "Moderate match worth exploring";
+  return "General networking opportunity";
+}
