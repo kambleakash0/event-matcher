@@ -63,7 +63,7 @@ function HomePage() {
               collection(db, 'attendees'),
               // Note: You might need to add a where clause if attendees have eventId
             );
-            
+
             // Fetch sponsor count for this event
             const sponsorsQuery = query(
               collection(db, 'sponsors'),
@@ -116,7 +116,7 @@ function HomePage() {
           <span className="badge">Next-Gen Event Intelligence</span>
           <h1>Turn Every Interaction into an Opportunity</h1>
           <p className="hero-subtitle">
-            Generic sponsor lists lead to missed connections. Event Connect uses 
+            Generic sponsor lists lead to missed connections. Event Connect uses
             advanced AI to align attendee professional goals with sponsor offerings.
           </p>
           <div className="hero-buttons">
@@ -127,7 +127,7 @@ function HomePage() {
             <a href="#events" className="btn btn-secondary">View Upcoming Events</a>
           </div>
         </div>
-        
+
         <div className="hero-visual">
           <div className="visual-card">
             <div className="match-header">

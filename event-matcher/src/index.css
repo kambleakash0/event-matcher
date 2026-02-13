@@ -1,13 +1,45 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+
 :root {
+  /* Core Palette - Deep Night */
+  --bg-dark: #020617;
+  /* Deepest blue/black */
+  --bg-card: rgba(15, 23, 42, 0.7);
+  /* Translucent slate */
+  --bg-glass: rgba(30, 41, 59, 0.4);
+
+  /* Accents */
   --primary: #6366f1;
-  --primary-dark: #4f46e5;
-  --secondary: #0ea5e9;
-  --bg-dark: #0f172a;
-  --bg-card: #1e293b;
+  /* Indigo 500 */
+  --primary-glow: rgba(99, 102, 241, 0.5);
+  --secondary: #06b6d4;
+  /* Cyan 500 */
+  --secondary-glow: rgba(6, 182, 212, 0.5);
+  --accent-pink: #ec4899;
+
+  /* Text */
   --text-primary: #f8fafc;
+  /* Slate 50 */
   --text-secondary: #94a3b8;
-  --border: #334155;
-  --gradient: linear-gradient(135deg, #6366f1 0%, #0ea5e9 100%);
+  /* Slate 400 */
+  --text-muted: #64748b;
+  /* Slate 500 */
+
+  /* UI Elements */
+  --border: rgba(148, 163, 184, 0.1);
+  --border-hover: rgba(148, 163, 184, 0.2);
+  --radius-lg: 24px;
+  --radius-md: 16px;
+  --radius-sm: 8px;
+
+  /* Gradients */
+  --gradient-primary: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+  --gradient-surface: linear-gradient(145deg, rgba(30, 41, 59, 0.4) 0%, rgba(15, 23, 42, 0.4) 100%);
+  --glass-shine: linear-gradient(145deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%);
+
+  /* Shadows */
+  --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+  --shadow-glow: 0 0 20px var(--primary-glow);
 }
 
 * {
@@ -16,16 +48,48 @@
   box-sizing: border-box;
 }
 
-html, body, #root {
+html,
+body,
+#root {
   width: 100%;
   min-height: 100vh;
-  margin: 0;
-  padding: 0;
+  background: var(--bg-dark);
+  font-family: 'Outfit', sans-serif;
+  color: var(--text-primary);
+  overflow-x: hidden;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
   background: var(--bg-dark);
 }
 
-body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  color: var(--text-primary);
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* Utility Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in {
+  animation: fadeIn 0.4s ease-out forwards;
 }
