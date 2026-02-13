@@ -7,9 +7,9 @@
 // import { runAgenticMatching } from './agenticMatchingOrchestrator_openrouter.js';
 import { runAgenticMatching } from './agenticMatchingOrchestrator_openrouter.js';
 
-// API Keys (keep your existing ones)
-const GEMINI_KEY = "AIzaSyDsPPYRL6unbYOq8mxaTdgPUt7b_KVzGH4";
-const OPENROUTER_KEY = "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";
+// API Keys
+const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+const OPENROUTER_KEY = import.meta.env.VITE_OPENROUTER_KEY;
 
 // Models to try in order (fallback)
 const PROVIDERS = [
@@ -48,19 +48,19 @@ const PROVIDERS = [
  */
 export async function runMatching(attendee, sponsors, event) {
   console.log("🚀 Starting matching system...");
-  
+
   try {
     // TRY AGENTIC SYSTEM FIRST
     console.log("🤖 Attempting agentic matching...");
     const result = await runAgenticMatching(attendee, sponsors, event);
     console.log("✅ Agentic matching succeeded!");
     return result;
-    
+
   } catch (agenticError) {
     // FALLBACK TO MONOLITHIC
     console.warn("⚠️ Agentic matching failed, using fallback:", agenticError.message);
     console.log("🔄 Falling back to monolithic LLM approach...");
-    
+
     return await runMonolithicMatching(attendee, sponsors, event);
   }
 }
@@ -70,7 +70,7 @@ export async function runMatching(attendee, sponsors, event) {
  */
 async function runMonolithicMatching(attendee, sponsors, event) {
   const prompt = buildPrompt(attendee, sponsors, event);
-  
+
   let lastError = null;
 
   for (const provider of PROVIDERS) {
@@ -127,7 +127,7 @@ async function callOpenRouter(prompt, model) {
 function parseResponse(text) {
   try {
     const jsonMatch = text.match(/```json\n?([\s\S]*?)\n?```/) ||
-                      text.match(/```\n?([\s\S]*?)\n?```/);
+      text.match(/```\n?([\s\S]*?)\n?```/);
     const jsonString = jsonMatch ? jsonMatch[1] : text;
     return JSON.parse(jsonString.trim());
   } catch (error) {
@@ -137,21 +137,21 @@ function parseResponse(text) {
 }
 
 function buildPrompt(attendee, sponsors, event) {
-    const sponsorsList = sponsors
-      .map((s, i) => {
-        const team = s.attendingTeam
-          ?.map((t) => `${t.name} (${t.title})`)
-          .join(", ") || "TBA";
-  
-        return `${i + 1}. ${s.companyName}
+  const sponsorsList = sponsors
+    .map((s, i) => {
+      const team = s.attendingTeam
+        ?.map((t) => `${t.name} (${t.title})`)
+        .join(", ") || "TBA";
+
+      return `${i + 1}. ${s.companyName}
      - Domain: ${s.domain || "Tech"}
      - Promoting: ${s.promotionType?.join(", ") || "General"}
      - Products: ${s.projectName || "Various"}
      - Team Attending: ${team}`;
-      })
-      .join("\n\n");
-  
-    return `You are an AI assistant creating a personalized event guide for an attendee.
+    })
+    .join("\n\n");
+
+  return `You are an AI assistant creating a personalized event guide for an attendee.
   
   EVENT: ${event.name}
   DATE: ${event.date}

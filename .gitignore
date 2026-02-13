@@ -138,6 +138,8 @@ dist
 .svelte-kit
 
 # custom ignores
+.vscode/*
+!.vscode/extensions.json
 event_matcher.db
 .agent
 .DS_Store
@@ -146,3 +148,4 @@ event_matcher.db
 serviceAccountKey.json
 .firebaserc
 firebase.json
+.firebase/
