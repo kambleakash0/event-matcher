@@ -5,7 +5,7 @@
  * Uses OpenRouter API
  */
 
-const OPENROUTER_KEY = "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";
+const OPENROUTER_KEY = "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";
 
 async function callOpenRouter(prompt, model = "openai/gpt-4o-mini") {
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {

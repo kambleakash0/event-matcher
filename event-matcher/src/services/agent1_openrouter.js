@@ -12,7 +12,7 @@
 
 import { matchingCache } from './matchingCache.js';
 
-const OPENROUTER_KEY = "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";
+const OPENROUTER_KEY = "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";
 
 /**
  * Ultra-fast API call
