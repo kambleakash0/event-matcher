@@ -831,6 +831,24 @@
   transform: none;
 }
 
+.chat-clear-btn {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+  padding: 4px 8px;
+}
+
+.chat-clear-btn:hover {
+  opacity: 1;
+}
+
 /* Responsive */
 
 /* Large Desktop (1440px+) */
