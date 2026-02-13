@@ -62,9 +62,9 @@ function AdminDashboard() {
           <a href="/admin/dashboard" className="nav-item active">
             <span>📊</span> Dashboard
           </a>
-          <button className="nav-item" onClick={() => setShowAddEvent(true)}>
+          <a href="/upload" className="nav-item">
             <span>➕</span> Add Event
-          </button>
+          </a>
           {/* <a href="/upload" className="nav-item">
             <span>📤</span> Upload Data
           </a> */}

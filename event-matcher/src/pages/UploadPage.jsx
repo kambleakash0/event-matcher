@@ -34,42 +34,183 @@ function UploadPage() {
     setStatus({ type: '', message: '' });
 
     try {
-      // This is a mock implementation - you'll need to implement the actual fetching logic
-      // Options:
-      // 1. Use a backend proxy to scrape the page
-      // 2. Use APIs from Meetup, Eventbrite if available
-      // 3. Use a third-party service like Diffbot
-      
-      // For now, we'll simulate an API call
-      const response = await fetch('/api/fetch-event-details', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: eventUrl })
-      });
+      // Fetch the HTML content from the URL
+      const proxyUrl = 'https://api.allorigins.win/get?url=';
+      const response = await fetch(proxyUrl + encodeURIComponent(eventUrl));
+      const data = await response.json();
+      const html = data.contents;
 
       if (!response.ok) {
-        throw new Error('Failed to fetch event details');
+        throw new Error(`Failed to fetch URL: ${response.status}`);
       }
 
-      const eventData = await response.json();
+      // const html = await response.text();
       
-      setEventName(eventData.name || '');
-      setEventDate(eventData.date || '');
-      setEventDescription(eventData.description || '');
-      setEventLocation(eventData.location || '');
+      // Parse the HTML to extract event details
+      const eventData = parseEventFromHtml(html, eventUrl);
+      
+      // Populate form fields
+      if (eventData.name) setEventName(eventData.name);
+      if (eventData.date) setEventDate(formatDateForInput(eventData.date));
+      if (eventData.description) setEventDescription(eventData.description);
+      if (eventData.location) setEventLocation(eventData.location);
+      
       setEventFetched(true);
-      setStatus({ type: 'success', message: 'Event details fetched successfully!' });
+      setStatus({ type: 'success', message: 'Event details fetched successfully! Review and edit as needed.' });
 
     } catch (error) {
       console.error('Error fetching event:', error);
-      // If the API doesn't exist yet, allow manual entry
-      setStatus({ 
-        type: 'warning', 
-        message: 'Could not auto-fetch event details. Please enter manually below.' 
-      });
+      
+      // CORS error - provide helpful message
+      if (error.message.includes('Failed to fetch') || error.name === 'TypeError') {
+        setStatus({ 
+          type: 'warning', 
+          message: 'Unable to fetch due to browser security (CORS). Please enter event details manually or use a CORS proxy.' 
+        });
+      } else {
+        setStatus({ 
+          type: 'warning', 
+          message: `Could not auto-fetch event details: ${error.message}. Please enter manually below.` 
+        });
+      }
+      
       setEventFetched(true); // Allow manual entry
     } finally {
       setFetchingEvent(false);
+    }
+  };
+
+  // Parse HTML content to extract event details
+  const parseEventFromHtml = (html, url) => {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+
+    const eventData = {
+      name: '',
+      date: '',
+      location: '',
+      description: ''
+    };
+
+    // Strategy 1: Try JSON-LD structured data (schema.org)
+    const jsonLdScripts = doc.querySelectorAll('script[type="application/ld+json"]');
+    jsonLdScripts.forEach(script => {
+      try {
+        const data = JSON.parse(script.textContent);
+        if (data['@type'] === 'Event') {
+          eventData.name = data.name || eventData.name;
+          eventData.date = data.startDate || eventData.date;
+          eventData.location = data.location?.name || data.location?.address?.addressLocality || eventData.location;
+          eventData.description = data.description || eventData.description;
+        }
+      } catch (e) {
+        // Ignore parse errors
+      }
+    });
+
+    // Strategy 2: Try Open Graph meta tags
+    const ogTitle = doc.querySelector('meta[property="og:title"]');
+    const ogDescription = doc.querySelector('meta[property="og:description"]');
+    
+    if (ogTitle && !eventData.name) {
+      eventData.name = ogTitle.getAttribute('content');
+    }
+    
+    if (ogDescription && !eventData.description) {
+      eventData.description = ogDescription.getAttribute('content');
+    }
+
+    // Strategy 3: Try meta description
+    const metaDescription = doc.querySelector('meta[name="description"]');
+    if (metaDescription && !eventData.description) {
+      eventData.description = metaDescription.getAttribute('content');
+    }
+
+    // Strategy 4: Try title tag
+    if (!eventData.name) {
+      const titleTag = doc.querySelector('title');
+      if (titleTag) {
+        eventData.name = titleTag.textContent.trim();
+      }
+    }
+
+    // Strategy 5: Try H1 tag
+    if (!eventData.name) {
+      const h1 = doc.querySelector('h1');
+      if (h1) {
+        eventData.name = h1.textContent.trim();
+      }
+    }
+
+    // Strategy 6: Look for date patterns
+    if (!eventData.date) {
+      const bodyText = doc.body?.textContent || '';
+      const datePatterns = [
+        /(\w+\s+\d{1,2},?\s+\d{4})/i,  // "January 15, 2024"
+        /(\d{4}-\d{2}-\d{2})/i,         // "2024-01-15"
+        /(\d{1,2}\/\d{1,2}\/\d{4})/i,   // "01/15/2024"
+      ];
+
+      for (const pattern of datePatterns) {
+        const match = bodyText.match(pattern);
+        if (match) {
+          eventData.date = match[1];
+          break;
+        }
+      }
+    }
+
+    // Strategy 7: Look for location
+    if (!eventData.location) {
+      const bodyText = doc.body?.textContent || '';
+      const locationKeywords = ['location:', 'venue:', 'where:', 'address:'];
+      
+      for (const keyword of locationKeywords) {
+        const index = bodyText.toLowerCase().indexOf(keyword);
+        if (index !== -1) {
+          const locationText = bodyText.substring(index + keyword.length, index + keyword.length + 100);
+          const locationMatch = locationText.match(/([A-Z][^.!?\n]*)/);
+          if (locationMatch) {
+            eventData.location = locationMatch[1].trim();
+            break;
+          }
+        }
+      }
+    }
+
+    // Clean up text
+    eventData.name = cleanText(eventData.name);
+    eventData.description = cleanText(eventData.description, 500);
+    eventData.location = cleanText(eventData.location);
+
+    return eventData;
+  };
+
+  // Clean and truncate text
+  const cleanText = (text, maxLength = 200) => {
+    if (!text) return '';
+    let cleaned = text.replace(/\s+/g, ' ').trim();
+    if (cleaned.length > maxLength) {
+      cleaned = cleaned.substring(0, maxLength) + '...';
+    }
+    return cleaned;
+  };
+
+  // Format date for input[type="date"]
+  const formatDateForInput = (dateString) => {
+    if (!dateString) return '';
+    
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return '';
+      
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      
+      return `${year}-${month}-${day}`;
+    } catch (e) {
+      return '';
     }
   };
 
@@ -283,7 +424,7 @@ function UploadPage() {
                 className="btn-fetch"
                 disabled={fetchingEvent || eventFetched}
               >
-                {fetchingEvent ? 'Fetching...' : eventFetched ? 'Fetched ✓' : 'Fetch Details'}
+                {fetchingEvent ? '⏳ Fetching...' : eventFetched ? '✓ Fetched' : '🔍 Fetch Details'}
               </button>
             </div>
           </div>
