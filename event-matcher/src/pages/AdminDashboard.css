@@ -248,6 +248,17 @@
   transition: all 0.2s;
 }
 
+.delete-btn {
+  padding: 0.5rem 1rem;
+  background: var(--bg-dark);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.2s;
+  background-color: rgb(253, 75, 75, 0.9);
+}
+
 .view-btn:hover {
   border-color: var(--primary);
   color: var(--primary);

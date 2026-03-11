@@ -16,6 +16,8 @@ import { db } from '../services/firebase';
 import { runMatching } from '../services/gemini';
 import './EventDetailPage.css';
 import { sendMatchEmail } from '../services/email';
+import Papa from 'papaparse';
+import { upsertAttendee, upsertSponsor } from '../services/firestoreHelpers';
 
 function EventDetailPage() {
   const { eventId } = useParams();
@@ -30,6 +32,12 @@ function EventDetailPage() {
   const [matchResult, setMatchResult] = useState(null);
   const [matching, setMatching] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [uploadAttendeesData, setUploadAttendeesData] = useState([]);
+  const [uploadSponsorsData, setUploadSponsorsData] = useState([]);
+  const [uploadStatus, setUploadStatus] = useState({ type: '', message: '' });
+  const [uploading, setUploading] = useState(false);
+  const [uploadAttendeesFileName, setUploadAttendeesFileName] = useState('');
+  const [uploadSponsorsFileName, setUploadSponsorsFileName] = useState('');
 
   // NEW: Batch matching state
   const [batchMatching, setBatchMatching] = useState(false);
@@ -224,6 +232,68 @@ function EventDetailPage() {
     setShowBatchModal(false);
   };
 
+  const handleUploadToEvent = async () => {
+  setUploading(true);
+  setUploadStatus({ type: '', message: '' });
+
+  try {
+    // Process attendees — each upsert returns true (new) or false (duplicate)
+    const attendeeResults = await Promise.all(
+      uploadAttendeesData.map(attendee =>
+        upsertAttendee(eventId, {
+          name: attendee.full_name || attendee.name || '',
+          email: attendee.email || '',
+          company: attendee.current_company || attendee.company || '',
+          jobTitle: attendee.job_title || attendee.title || '',
+          intent: attendee.intent ? attendee.intent.split(',').map(s => s.trim()) : [],
+          createdAt: new Date()
+        })
+      )
+    );
+
+    // Process sponsors — same pattern
+    const sponsorResults = await Promise.all(
+      uploadSponsorsData.map(sponsor =>
+        upsertSponsor(eventId, {
+          companyName: sponsor.sponsor_name || sponsor.company_name || '',
+          domain: sponsor.company_domain || sponsor.domain || '',
+          promotionType: sponsor.what_are_they_promoting_at_this_event || '',
+          projectName: sponsor.project_or_product_name || '',
+          createdAt: new Date()
+        })
+      )
+    );
+
+    // Count how many were genuinely new vs already existing
+    const newAttendees = attendeeResults.filter(Boolean).length;
+    const dupAttendees = attendeeResults.length - newAttendees;
+    const newSponsors = sponsorResults.filter(Boolean).length;
+    const dupSponsors = sponsorResults.length - newSponsors;
+
+    // Build a readable summary message
+    const parts = [];
+    if (newAttendees > 0) parts.push(`${newAttendees} new attendee${newAttendees !== 1 ? 's' : ''} added`);
+    if (dupAttendees > 0) parts.push(`${dupAttendees} attendee${dupAttendees !== 1 ? 's' : ''} already existed`);
+    if (newSponsors > 0) parts.push(`${newSponsors} new sponsor${newSponsors !== 1 ? 's' : ''} added`);
+    if (dupSponsors > 0) parts.push(`${dupSponsors} sponsor${dupSponsors !== 1 ? 's' : ''} already existed`);
+
+    setUploadStatus({
+      type: 'success',
+      message: parts.join(' · ') || 'Nothing to upload'
+    });
+    setUploadAttendeesData([]);
+    setUploadSponsorsData([]);
+    setUploadAttendeesFileName('');
+    setUploadSponsorsFileName('');
+    fetchEventData();
+  } catch (error) {
+    console.error('Upload error:', error);
+    setUploadStatus({ type: 'error', message: `Error: ${error.message}` });
+  } finally {
+    setUploading(false);
+  }
+};
+
   const handleSendEmail = async () => {
     if (!selectedAttendee || !matchResult || !event) {
       alert('Missing required data');
@@ -277,6 +347,7 @@ function EventDetailPage() {
             <h1>{event?.name}</h1>
             <div className="event-meta">
               <span className="meta-item">📅 {event?.date}</span>
+              <span className="meta-item">⏰ {event?.startTime} - {event?.endTime}</span>
               <span className="meta-item">👥 {attendees.length} Attendees</span>
               <span className="meta-item">🏢 {sponsors.length} Sponsors</span>
               <span className={`status-badge status-${event?.status}`}>
@@ -313,6 +384,12 @@ function EventDetailPage() {
             >
               Sponsors ({sponsors.length})
             </button>
+            <button
+              className={`tab ${activeTab === 'upload' ? 'active' : ''}`}
+              onClick={() => { setActiveTab('upload'); setSelectedAttendee(null); }}
+            >
+              + Upload Data
+            </button>
           </div>
         </div>
 
@@ -343,7 +420,7 @@ function EventDetailPage() {
                   ))}
                 </div>
               )
-            ) : (
+            ) : activeTab === 'sponsors' ? (
               sponsors.length === 0 ? (
                 <div className="empty-state">No sponsors found</div>
               ) : (
@@ -361,7 +438,94 @@ function EventDetailPage() {
                   ))}
                 </div>
               )
-            )}
+            ): (
+            <div className="upload-panel">
+              {uploadStatus.message && (
+                <div className={`status-message ${uploadStatus.type}`}>
+                  {uploadStatus.type === 'success' ? '✓' : '✗'} {uploadStatus.message}
+                </div>
+              )}
+
+              {/* Attendees Section */}
+              <div className="form-section">
+                <div className="section-header">
+                  <h3>Add Attendees</h3>
+                  {uploadAttendeesData.length > 0 && (
+                    <span className="csv-status valid">
+                      ✓ {uploadAttendeesData.length} attendees loaded
+                    </span>
+                  )}
+                </div>
+                <p className="section-description">
+                  Upload a CSV file with attendee information
+                </p>
+                <label htmlFor="upload-attendees" className="file-upload-label">
+                  <span className="upload-icon">📄</span>
+                  <span>{uploadAttendeesFileName || 'Choose CSV File'}</span>
+                </label>
+                <input
+                  id="upload-attendees"
+                  type="file"
+                  accept=".csv"
+                  className="file-input"
+                  onChange={(e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    setUploadAttendeesFileName(file.name);
+                    Papa.parse(file, {
+                      header: true,
+                      skipEmptyLines: true,
+                      complete: (results) => setUploadAttendeesData(results.data)
+                    });
+                  }}
+                />
+              </div>
+
+              {/* Sponsors Section */}
+              <div className="form-section">
+                <div className="section-header">
+                  <h3>Add Sponsors</h3>
+                  {uploadSponsorsData.length > 0 && (
+                    <span className="csv-status valid">
+                      ✓ {uploadSponsorsData.length} sponsors loaded
+                    </span>
+                  )}
+                </div>
+                <p className="section-description">
+                  Upload a CSV file with sponsor information
+                </p>
+                <label htmlFor="upload-sponsors" className="file-upload-label">
+                  <span className="upload-icon">📄</span>
+                  <span>{uploadSponsorsFileName || 'Choose CSV File'}</span>
+                </label>
+                <input
+                  id="upload-sponsors"
+                  type="file"
+                  accept=".csv"
+                  className="file-input"
+                  onChange={(e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    setUploadSponsorsFileName(file.name);
+                    Papa.parse(file, {
+                      header: true,
+                      skipEmptyLines: true,
+                      complete: (results) => setUploadSponsorsData(results.data)
+                    });
+                  }}
+                />
+              </div>
+
+              <button
+                className="btn-primary"
+                onClick={handleUploadToEvent}
+                disabled={uploading || (uploadAttendeesData.length === 0 && uploadSponsorsData.length === 0)}
+              >
+                {uploading ? 'Uploading...' : 'Upload to Event'}
+              </button>
+            </div>
+            
+          )}
           </div>
 
           {/* Detail Panel - SINGLE ATTENDEE MATCHING */}

@@ -5,12 +5,16 @@ import { useNavigate } from 'react-router-dom';
 import Papa from 'papaparse';
 import './UploadPage.css';
 
+import { upsertAttendee, upsertSponsor } from '../services/firestoreHelpers';
+
 function UploadPage() {
   const [eventUrl, setEventUrl] = useState('');
   const [eventName, setEventName] = useState('');
   const [eventDate, setEventDate] = useState('');
   const [eventDescription, setEventDescription] = useState('');
   const [eventLocation, setEventLocation] = useState('');
+  const [eventstartTime, setEventstartTime] = useState('');
+  const [eventendTime, setEventendTime] = useState('');
   const [fetchingEvent, setFetchingEvent] = useState(false);
   const [eventFetched, setEventFetched] = useState(false);
   
@@ -54,7 +58,9 @@ function UploadPage() {
       if (eventData.date) setEventDate(formatDateForInput(eventData.date));
       if (eventData.description) setEventDescription(eventData.description);
       if (eventData.location) setEventLocation(eventData.location);
-      
+      if (eventData.startTime) setEventstartTime(eventData.startTime);
+      if (eventData.endTime) setEventendTime(eventData.endTime);
+
       setEventFetched(true);
       setStatus({ type: 'success', message: 'Event details fetched successfully! Review and edit as needed.' });
 
@@ -89,7 +95,9 @@ function UploadPage() {
       name: '',
       date: '',
       location: '',
-      description: ''
+      description: '',
+      startTime: '',
+      endTime: ''
     };
 
     // Strategy 1: Try JSON-LD structured data (schema.org)
@@ -102,6 +110,12 @@ function UploadPage() {
           eventData.date = data.startDate || eventData.date;
           eventData.location = data.location?.name || data.location?.address?.addressLocality || eventData.location;
           eventData.description = data.description || eventData.description;
+          if (data.startDate) {
+            eventData.startTime = data.startDate.substring(11, 16);
+          }
+          if (data.endDate) {
+            eventData.endTime = data.endDate.substring(11, 16);
+          }
         }
       } catch (e) {
         // Ignore parse errors
@@ -295,6 +309,8 @@ function UploadPage() {
         date: eventDate,
         description: eventDescription || '',
         location: eventLocation || '',
+        startTime: eventstartTime || '',
+        endTime: eventendTime || '',
         sourceUrl: eventUrl || '',
         status: 'upcoming',
         attendeeCount: attendeesData.length,
@@ -304,41 +320,36 @@ function UploadPage() {
 
       const eventId = eventRef.id;
 
-      // 2. Batch write attendees + sponsors
-      const batch = writeBatch(db);
+      // Add attendees — deduplication via deterministic ID
+      await Promise.all(
+        attendeesData.map(attendee =>
+          upsertAttendee(eventId, {
+            name: attendee.full_name || attendee.name || '',
+            email: attendee.email || '',
+            githubUrl: attendee.github || attendee.github_url || null,
+            linkedIn: attendee.linkedin || attendee.linkedin_url || null,
+            company: attendee.current_company || attendee.company || '',
+            jobTitle: attendee.job_title || attendee.title || '',
+            intent: parseArrayField(attendee.what_are_you_hoping_to_get_from_this_event || attendee.intent || ''),
+            createdAt: new Date()
+          })
+        )
+      );
 
-      // Add attendees
-      attendeesData.forEach((attendee) => {
-        const ref = doc(collection(db, 'attendees'));
-        batch.set(ref, {
-          eventId,
-          name: attendee.full_name || attendee.name || '',
-          email: attendee.email || '',
-          githubUrl: attendee.github || attendee.github_url || null,
-          linkedIn: attendee.linkedin || attendee.linkedin_url || null,
-          company: attendee.current_company || attendee.company || '',
-          jobTitle: attendee.job_title || attendee.title || '',
-          intent: parseArrayField(attendee.what_are_you_hoping_to_get_from_this_event || attendee.intent || ''),
-          createdAt: new Date()
-        });
-      });
-
-      // Add sponsors
-      sponsorsData.forEach((sponsor) => {
-        const ref = doc(collection(db, 'sponsors'));
-        batch.set(ref, {
-          eventId,
-          companyName: sponsor.sponsor_name || sponsor.company_name || '',
-          domain: sponsor.company_domain || sponsor.domain || '',
-          promotionType: parseArrayField(sponsor.what_are_they_promoting_at_this_event || sponsor.promotion || ''),
-          projectName: sponsor.project_or_product_name || sponsor.project_name || '',
-          attendingTeam: parseArrayField(sponsor.who_is_attending_from_the_company || sponsor.team || ''),
-          eventPageUrl: sponsor.event_page_url || sponsor.page_url || null,
-          createdAt: new Date()
-        });
-      });
-
-      await batch.commit();
+      // Add sponsors — deduplication via deterministic ID
+      await Promise.all(
+        sponsorsData.map(sponsor =>
+          upsertSponsor(eventId, {
+            companyName: sponsor.sponsor_name || sponsor.company_name || '',
+            domain: sponsor.company_domain || sponsor.domain || '',
+            promotionType: parseArrayField(sponsor.what_are_they_promoting_at_this_event || sponsor.promotion || ''),
+            projectName: sponsor.project_or_product_name || sponsor.project_name || '',
+            attendingTeam: parseArrayField(sponsor.who_is_attending_from_the_company || sponsor.team || ''),
+            eventPageUrl: sponsor.event_page_url || sponsor.page_url || null,
+            createdAt: new Date()
+          })
+        )
+      );
 
       setStatus({ 
         type: 'success', 
@@ -461,6 +472,26 @@ function UploadPage() {
                   value={eventLocation}
                   onChange={(e) => setEventLocation(e.target.value)}
                   placeholder="San Francisco, CA"
+                />
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Start Time</label>
+                <input
+                  type="time"
+                  value={eventstartTime}
+                  onChange={(e) => setEventstartTime(e.target.value)}
+                  placeholder="10:00 AM"
+                />
+              </div>
+              <div className="form-group">
+                <label>End Time</label>
+                <input
+                  type="time"
+                  value={eventendTime}
+                  onChange={(e) => setEventendTime(e.target.value)}
+                  placeholder="5:00 PM"
                 />
               </div>
             </div>

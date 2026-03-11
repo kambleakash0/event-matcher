@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, where, deleteDoc, doc, writeBatch } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import './AdminDashboard.css';
 
@@ -38,6 +38,36 @@ function AdminDashboard() {
   const handleLogout = () => {
     localStorage.removeItem('isLoggedIn');
     navigate('/');
+  };
+
+  const handleDeleteEvent = async (eventId) => {
+    const confirmed = window.confirm('Delete this event and all its attendees and sponsors?');
+    if (!confirmed) return;
+
+    // Delete attendees
+    try {
+    const q = query(collection(db, 'attendees'), where('eventId', '==', eventId));
+    const snapshot = await getDocs(q);
+    const batch = writeBatch(db);
+    snapshot.docs.forEach(d => batch.delete(d.ref));
+    await batch.commit();
+
+    // Delete sponsors
+    const q2 = query(collection(db, 'sponsors'), where('eventId', '==', eventId));
+    const snapshot2 = await getDocs(q2);
+    const batch2 = writeBatch(db);
+    snapshot2.docs.forEach(d => batch2.delete(d.ref));
+    await batch2.commit();
+    
+    // Delete event
+    await deleteDoc(doc(db, 'events', eventId));
+
+    // Refresh events list
+    fetchEvents();
+    } catch (error) {
+      console.error('Error deleting event:', error);
+      alert('Failed to delete event. Please try again.');
+    }
   };
 
   const getStatusColor = (status) => {
@@ -167,6 +197,12 @@ function AdminDashboard() {
                           onClick={() => navigate(`/admin/event/${event.id}`)}
                         >
                           View Details
+                        </button>
+                        <button
+                          className="delete-btn"
+                          onClick={() => handleDeleteEvent(event.id)}
+                        >
+                          Delete
                         </button>
                       </td>
                     </tr>
