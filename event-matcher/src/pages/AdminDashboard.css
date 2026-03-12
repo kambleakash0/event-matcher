@@ -256,7 +256,7 @@
   color: var(--text-primary);
   cursor: pointer;
   transition: all 0.2s;
-  background-color: rgb(253, 75, 75, 0.9);
+  background-color: rgba(253, 75, 75, 0.9);
 }
 
 .view-btn:hover {

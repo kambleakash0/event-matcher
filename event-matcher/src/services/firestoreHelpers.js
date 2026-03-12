@@ -1,5 +1,5 @@
 import { db } from './firebase';
-import { doc, setDoc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
 
 // Builds a predictable sponsor ID
 export function buildSponsorId(eventId, companyName) {
@@ -32,6 +32,7 @@ export async function upsertAttendee(eventId, attendeeData) {
   await setDoc(ref, {
     eventId,
     ...attendeeData,
+    ...(existing.exists() ? {} : { createdAt: new Date() }),
     updatedAt: new Date()
   }, { merge: true });
   return !existing.exists(); // true = new, false = duplicate
@@ -45,6 +46,7 @@ export async function upsertSponsor(eventId, sponsorData) {
   await setDoc(ref, {
     eventId,
     ...sponsorData,
+    ...(existing.exists() ? {} : { createdAt: new Date() }),
     updatedAt: new Date()
   }, { merge: true });
   return !existing.exists(); // true = new, false = duplicate

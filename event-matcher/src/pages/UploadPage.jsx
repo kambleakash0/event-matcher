@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { collection, addDoc, writeBatch, doc } from 'firebase/firestore';
+import { collection, addDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { useNavigate } from 'react-router-dom';
 import Papa from 'papaparse';
@@ -13,8 +13,8 @@ function UploadPage() {
   const [eventDate, setEventDate] = useState('');
   const [eventDescription, setEventDescription] = useState('');
   const [eventLocation, setEventLocation] = useState('');
-  const [eventstartTime, setEventstartTime] = useState('');
-  const [eventendTime, setEventendTime] = useState('');
+  const [eventStartTime, setEventStartTime] = useState('');
+  const [eventEndTime, setEventEndTime] = useState('');
   const [fetchingEvent, setFetchingEvent] = useState(false);
   const [eventFetched, setEventFetched] = useState(false);
   
@@ -58,8 +58,8 @@ function UploadPage() {
       if (eventData.date) setEventDate(formatDateForInput(eventData.date));
       if (eventData.description) setEventDescription(eventData.description);
       if (eventData.location) setEventLocation(eventData.location);
-      if (eventData.startTime) setEventstartTime(eventData.startTime);
-      if (eventData.endTime) setEventendTime(eventData.endTime);
+      if (eventData.startTime) setEventStartTime(eventData.startTime);
+      if (eventData.endTime) setEventEndTime(eventData.endTime);
 
       setEventFetched(true);
       setStatus({ type: 'success', message: 'Event details fetched successfully! Review and edit as needed.' });
@@ -280,6 +280,16 @@ function UploadPage() {
     });
   };
 
+  async function processInBatches(items, batchSize, fn) {
+    const results = [];
+    for (let i = 0; i < items.length; i += batchSize) {
+      const chunk = items.slice(i, i + batchSize);
+      const chunkResults = await Promise.all(chunk.map(fn));
+      results.push(...chunkResults);
+    }
+    return results;
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setStatus({ type: '', message: '' });
@@ -309,8 +319,8 @@ function UploadPage() {
         date: eventDate,
         description: eventDescription || '',
         location: eventLocation || '',
-        startTime: eventstartTime || '',
-        endTime: eventendTime || '',
+        startTime: eventStartTime || '',
+        endTime: eventEndTime || '',
         sourceUrl: eventUrl || '',
         status: 'upcoming',
         attendeeCount: attendeesData.length,
@@ -321,8 +331,8 @@ function UploadPage() {
       const eventId = eventRef.id;
 
       // Add attendees — deduplication via deterministic ID
-      await Promise.all(
-        attendeesData.map(attendee =>
+      await processInBatches(
+        attendeesData, 10, attendee =>
           upsertAttendee(eventId, {
             name: attendee.full_name || attendee.name || '',
             email: attendee.email || '',
@@ -330,25 +340,21 @@ function UploadPage() {
             linkedIn: attendee.linkedin || attendee.linkedin_url || null,
             company: attendee.current_company || attendee.company || '',
             jobTitle: attendee.job_title || attendee.title || '',
-            intent: parseArrayField(attendee.what_are_you_hoping_to_get_from_this_event || attendee.intent || ''),
-            createdAt: new Date()
+            intent: parseArrayField(attendee.what_are_you_hoping_to_get_from_this_event || attendee.intent || '')
           })
-        )
       );
 
       // Add sponsors — deduplication via deterministic ID
-      await Promise.all(
-        sponsorsData.map(sponsor =>
+      await processInBatches(
+        sponsorsData, 10, sponsor =>
           upsertSponsor(eventId, {
             companyName: sponsor.sponsor_name || sponsor.company_name || '',
             domain: sponsor.company_domain || sponsor.domain || '',
             promotionType: parseArrayField(sponsor.what_are_they_promoting_at_this_event || sponsor.promotion || ''),
             projectName: sponsor.project_or_product_name || sponsor.project_name || '',
             attendingTeam: parseArrayField(sponsor.who_is_attending_from_the_company || sponsor.team || ''),
-            eventPageUrl: sponsor.event_page_url || sponsor.page_url || null,
-            createdAt: new Date()
+            eventPageUrl: sponsor.event_page_url || sponsor.page_url || null
           })
-        )
       );
 
       setStatus({ 
@@ -480,8 +486,8 @@ function UploadPage() {
                 <label>Start Time</label>
                 <input
                   type="time"
-                  value={eventstartTime}
-                  onChange={(e) => setEventstartTime(e.target.value)}
+                  value={eventStartTime}
+                  onChange={(e) => setEventStartTime(e.target.value)}
                   placeholder="10:00 AM"
                 />
               </div>
@@ -489,8 +495,8 @@ function UploadPage() {
                 <label>End Time</label>
                 <input
                   type="time"
-                  value={eventendTime}
-                  onChange={(e) => setEventendTime(e.target.value)}
+                  value={eventEndTime}
+                  onChange={(e) => setEventEndTime(e.target.value)}
                   placeholder="5:00 PM"
                 />
               </div>

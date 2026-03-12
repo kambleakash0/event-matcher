@@ -1,6 +1,6 @@
 // Builds a predictable sponsor ID
 export function buildSponsorText(sponsorData) {
-  let text = sponsorData.companyName?.toLowerCase().trim()+" Domain:"+sponsorData.domain?.toLowerCase().trim()+" Project:"+sponsorData.projectName?.toLowerCase().trim()+" PromotionType:"+sponsorData.promotionType?.toLowerCase().trim()+" Team:";
+  let text = sponsorData.companyName?.toLowerCase().trim()+" Domain:"+sponsorData.domain?.toLowerCase().trim()+" Project:"+sponsorData.projectName?.toLowerCase().trim()+" PromotionType:"+(Array.isArray(sponsorData.promotionType) ? sponsorData.promotionType.join(', ') : sponsorData.promotionType || '')+" Team:";
   for (const attendee of sponsorData.attendingTeam || []) {
     const role = attendee.split('-')[1];
     if (role) text += role.toLowerCase().trim() + ",";

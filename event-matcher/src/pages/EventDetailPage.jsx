@@ -11,7 +11,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, getDoc, collection, query, where, getDocs, addDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, addDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { runMatching } from '../services/gemini';
 import './EventDetailPage.css';
@@ -232,36 +232,42 @@ function EventDetailPage() {
     setShowBatchModal(false);
   };
 
+  async function processInBatches(items, batchSize, fn) {
+    const results = [];
+    for (let i = 0; i < items.length; i += batchSize) {
+      const chunk = items.slice(i, i + batchSize);
+      const chunkResults = await Promise.all(chunk.map(fn));
+      results.push(...chunkResults);
+    }
+    return results;
+  }
+
   const handleUploadToEvent = async () => {
   setUploading(true);
   setUploadStatus({ type: '', message: '' });
 
   try {
     // Process attendees — each upsert returns true (new) or false (duplicate)
-    const attendeeResults = await Promise.all(
-      uploadAttendeesData.map(attendee =>
+    const attendeeResults = await processInBatches(
+        uploadAttendeesData, 10, attendee =>
         upsertAttendee(eventId, {
           name: attendee.full_name || attendee.name || '',
           email: attendee.email || '',
           company: attendee.current_company || attendee.company || '',
           jobTitle: attendee.job_title || attendee.title || '',
-          intent: attendee.intent ? attendee.intent.split(',').map(s => s.trim()) : [],
-          createdAt: new Date()
+          intent: attendee.intent ? attendee.intent.split(',').map(s => s.trim()) : []
         })
-      )
     );
 
     // Process sponsors — same pattern
-    const sponsorResults = await Promise.all(
-      uploadSponsorsData.map(sponsor =>
+    const sponsorResults = await processInBatches(
+        uploadSponsorsData, 10, sponsor =>
         upsertSponsor(eventId, {
           companyName: sponsor.sponsor_name || sponsor.company_name || '',
           domain: sponsor.company_domain || sponsor.domain || '',
           promotionType: sponsor.what_are_they_promoting_at_this_event || '',
-          projectName: sponsor.project_or_product_name || '',
-          createdAt: new Date()
+          projectName: sponsor.project_or_product_name || ''
         })
-      )
     );
 
     // Count how many were genuinely new vs already existing
@@ -269,6 +275,11 @@ function EventDetailPage() {
     const dupAttendees = attendeeResults.length - newAttendees;
     const newSponsors = sponsorResults.filter(Boolean).length;
     const dupSponsors = sponsorResults.length - newSponsors;
+
+    await updateDoc(doc(db, 'events', eventId), {
+      attendeeCount: attendees.length + newAttendees,
+      sponsorCount: sponsors.length + newSponsors
+    });
 
     // Build a readable summary message
     const parts = [];
