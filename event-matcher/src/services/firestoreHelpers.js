@@ -14,6 +14,9 @@ export function buildSponsorId(eventId, companyName) {
 
 // Builds a predictable attendee ID — hashed email is unique per person
 export function buildAttendeeId(eventId, email) {
+  if (!email || !email.trim()) {
+    throw new Error(`Cannot build attendee ID for eventId "${eventId}": email is required`);
+  }
   const normalized = email.toLowerCase().trim();
   // Simple hash — not cryptographic, just opaque
   let hash = 0;

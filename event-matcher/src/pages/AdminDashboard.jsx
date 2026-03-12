@@ -40,30 +40,38 @@ function AdminDashboard() {
     navigate('/');
   };
 
+  const commitChunkedDeletions = async (docs) => {
+    const CHUNK_SIZE = 500;
+    for (let i = 0; i < docs.length; i += CHUNK_SIZE) {
+      const batch = writeBatch(db);
+      const chunk = docs.slice(i, i + CHUNK_SIZE);
+      chunk.forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+    }
+  };
+
   const handleDeleteEvent = async (eventId) => {
-    const confirmed = window.confirm('Delete this event and all its attendees and sponsors?');
+    const confirmed = window.confirm('Delete this event and all its attendees, sponsors, and matches?');
     if (!confirmed) return;
 
-    // Delete attendees
     try {
-    const q = query(collection(db, 'attendees'), where('eventId', '==', eventId));
-    const snapshot = await getDocs(q);
-    const batch = writeBatch(db);
-    snapshot.docs.forEach(d => batch.delete(d.ref));
-    await batch.commit();
+      // Delete attendees
+      const attendeesSnapshot = await getDocs(query(collection(db, 'attendees'), where('eventId', '==', eventId)));
+      await commitChunkedDeletions(attendeesSnapshot.docs);
 
-    // Delete sponsors
-    const q2 = query(collection(db, 'sponsors'), where('eventId', '==', eventId));
-    const snapshot2 = await getDocs(q2);
-    const batch2 = writeBatch(db);
-    snapshot2.docs.forEach(d => batch2.delete(d.ref));
-    await batch2.commit();
-    
-    // Delete event
-    await deleteDoc(doc(db, 'events', eventId));
+      // Delete sponsors
+      const sponsorsSnapshot = await getDocs(query(collection(db, 'sponsors'), where('eventId', '==', eventId)));
+      await commitChunkedDeletions(sponsorsSnapshot.docs);
 
-    // Refresh events list
-    fetchEvents();
+      // Delete matches
+      const matchesSnapshot = await getDocs(query(collection(db, 'matches'), where('eventId', '==', eventId)));
+      await commitChunkedDeletions(matchesSnapshot.docs);
+
+      // Delete event
+      await deleteDoc(doc(db, 'events', eventId));
+
+      // Refresh events list
+      fetchEvents();
     } catch (error) {
       console.error('Error deleting event:', error);
       alert('Failed to delete event. Please try again.');

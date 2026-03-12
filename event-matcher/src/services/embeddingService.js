@@ -1,18 +1,25 @@
 // Builds a predictable sponsor ID
 export function buildSponsorText(sponsorData) {
-  let text = sponsorData.companyName?.toLowerCase().trim()+" Domain:"+sponsorData.domain?.toLowerCase().trim()+" Project:"+sponsorData.projectName?.toLowerCase().trim()+" PromotionType:"+(Array.isArray(sponsorData.promotionType) ? sponsorData.promotionType.join(', ') : sponsorData.promotionType || '')+" Team:";
+  const promotionType = Array.isArray(sponsorData.promotionType)
+    ? sponsorData.promotionType.join(', ')
+    : sponsorData.promotionType ?? '';
+  let text = (sponsorData.companyName ?? '').toLowerCase().trim()+" Domain:"+(sponsorData.domain ?? '').toLowerCase().trim()+" Project:"+(sponsorData.projectName ?? '').toLowerCase().trim()+" PromotionType:"+promotionType.toLowerCase().trim()+" Team:";
   for (const attendee of sponsorData.attendingTeam || []) {
     const role = attendee.split('-')[1];
     if (role) text += role.toLowerCase().trim() + ",";
-  };
-  console.log("Sponsor Text: ", text);
+  }
+  if (import.meta.env.DEV) {
+    console.log("Sponsor Text: ", text);
+  }
   return text;
 }
 
 // Builds a predictable attendee ID
 export function buildAttendeeText(attendeeData) {
-  let text = attendeeData.name?.toLowerCase().trim()+", "+attendeeData.jobTitle?.toLowerCase().trim()+" at "+attendeeData.company?.toLowerCase().trim()+" Intent:"+attendeeData.intent?.join(',').toLowerCase().trim();
-  console.log("Attendee Text: ", text);
+  let text = (attendeeData.name ?? '').toLowerCase().trim()+", "+(attendeeData.jobTitle ?? '').toLowerCase().trim()+" at "+(attendeeData.company ?? '').toLowerCase().trim()+" Intent:"+(attendeeData.intent?.join(',') ?? '').toLowerCase().trim();
+  if (import.meta.env.DEV) {
+    console.log("Attendee Text: ", text);
+  }
   return text;
 }
 

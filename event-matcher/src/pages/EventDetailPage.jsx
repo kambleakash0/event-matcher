@@ -242,6 +242,17 @@ function EventDetailPage() {
     return results;
   }
 
+  const parseArrayField = (field) => {
+    if (!field) return [];
+    if (Array.isArray(field)) return field;
+    try {
+      const parsed = JSON.parse(field);
+      return Array.isArray(parsed) ? parsed : [field];
+    } catch {
+      return field.split(/[,;|]/).map(s => s.trim()).filter(Boolean);
+    }
+  };
+
   const handleUploadToEvent = async () => {
   setUploading(true);
   setUploadStatus({ type: '', message: '' });
@@ -261,13 +272,15 @@ function EventDetailPage() {
 
     // Process sponsors — same pattern
     const sponsorResults = await processInBatches(
-        uploadSponsorsData, 10, sponsor =>
-        upsertSponsor(eventId, {
+        uploadSponsorsData, 10, sponsor => {
+        const rawPromotionType = sponsor.what_are_they_promoting_at_this_event ?? sponsor.promotionType ?? '';
+        return upsertSponsor(eventId, {
           companyName: sponsor.sponsor_name || sponsor.company_name || '',
           domain: sponsor.company_domain || sponsor.domain || '',
-          promotionType: sponsor.what_are_they_promoting_at_this_event || '',
+          promotionType: parseArrayField(rawPromotionType),
           projectName: sponsor.project_or_product_name || ''
-        })
+        });
+      }
     );
 
     // Count how many were genuinely new vs already existing
