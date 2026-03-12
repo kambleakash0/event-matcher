@@ -1,9 +1,0 @@
-{
-  "mcpServers": {
-    "event-matcher": {
-      "command": "python",
-      "args": ["/FULL/PATH/TO/event-matcher/server.py"],
-      "env": {}
-    }
-  }
-}
