@@ -286,6 +286,10 @@ function UploadPage() {
       const chunk = items.slice(i, i + batchSize);
       const chunkResults = await Promise.all(chunk.map(fn));
       results.push(...chunkResults);
+
+      if (i + batchSize < items.length) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      }
     }
     return results;
   }
@@ -297,16 +301,6 @@ function UploadPage() {
     // Validation
     if (!eventName || !eventDate) {
       setStatus({ type: 'error', message: 'Event name and date are required' });
-      return;
-    }
-
-    if (attendeesData.length === 0) {
-      setStatus({ type: 'error', message: 'Please upload attendees CSV file' });
-      return;
-    }
-
-    if (sponsorsData.length === 0) {
-      setStatus({ type: 'error', message: 'Please upload sponsors CSV file' });
       return;
     }
 
@@ -332,7 +326,7 @@ function UploadPage() {
 
       // Add attendees — deduplication via deterministic ID
       await processInBatches(
-        attendeesData, 10, attendee =>
+        attendeesData, 5, attendee =>
           upsertAttendee(eventId, {
             name: attendee.full_name || attendee.name || '',
             email: attendee.email || '',
@@ -346,7 +340,7 @@ function UploadPage() {
 
       // Add sponsors — deduplication via deterministic ID
       await processInBatches(
-        sponsorsData, 10, sponsor =>
+        sponsorsData, 5, sponsor =>
           upsertSponsor(eventId, {
             companyName: sponsor.sponsor_name || sponsor.company_name || '',
             domain: sponsor.company_domain || sponsor.domain || '',
@@ -536,7 +530,6 @@ function UploadPage() {
                 accept=".csv"
                 onChange={handleAttendeesUpload}
                 className="file-input"
-                required
               />
             </div>
           </div>
@@ -565,7 +558,6 @@ function UploadPage() {
                 accept=".csv"
                 onChange={handleSponsorsUpload}
                 className="file-input"
-                required
               />
             </div>
           </div>
@@ -581,7 +573,7 @@ function UploadPage() {
             <button 
               type="submit" 
               className="btn-primary"
-              disabled={loading || attendeesData.length === 0 || sponsorsData.length === 0}
+              disabled={loading}
             >
               {loading ? 'Creating Event...' : 'Create Event'}
             </button>

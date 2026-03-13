@@ -11,7 +11,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, getDoc, collection, query, where, getDocs, addDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, addDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { runMatching } from '../services/gemini';
 import './EventDetailPage.css';
@@ -86,11 +86,25 @@ function EventDetailPage() {
     setMatchResult(null);
 
     try {
+      // Check if match already exists
+      const existingMatch = await getDocs(
+        query(collection(db, 'matches'), 
+          where('eventId', '==', eventId),
+          where('attendeeId', '==', attendee.id)
+        )
+      );
+
+      if (!existingMatch.empty) {
+        setMatchResult(existingMatch.docs[0].data());
+        setShowModal(true);
+        setMatching(false);
+        return; // skip pipeline entirely
+      }
       const result = await runMatching(attendee, sponsors, event);
       setMatchResult(result);
       setShowModal(true);
 
-      await addDoc(collection(db, 'matches'), {
+      await addDoc(collection(db, 'matches'), sanitizeForFirestore({
         eventId,
         attendeeId: attendee.id,
         attendeeName: attendee.name || '',
@@ -103,7 +117,7 @@ function EventDetailPage() {
         emailSubject: result.subject || '',
         emailStatus: 'pending',
         createdAt: new Date()
-      });
+      }));
 
     } catch (error) {
       console.error('Matching error:', error);
@@ -111,6 +125,12 @@ function EventDetailPage() {
     } finally {
       setMatching(false);
     }
+  };
+
+  const sanitizeForFirestore = (obj) => {
+    return JSON.parse(JSON.stringify(obj, (key, value) => 
+      value === undefined ? null : value
+    ));
   };
 
   // NEW: Batch matching for all attendees
@@ -145,11 +165,25 @@ function EventDetailPage() {
           setCurrentAttendee(attendee.name);
           
           try {
+            // Check if match already exists
+            const existingMatch = await getDocs(
+              query(collection(db, 'matches'),
+                where('eventId', '==', eventId),
+                where('attendeeId', '==', attendee.id)
+              )
+            );
+
+            if (!existingMatch.empty) {
+              console.log(`⚡ Cache hit: ${attendee.name}`);
+              return { success: true, attendee, fromCache: true,
+                topMatches: existingMatch.docs[0].data().sponsorMatches?.slice(0, 3).map(m => m.sponsor) || []
+              };
+            }
             console.log(`\n🎯 Matching: ${attendee.name}`);
             
             const result = await runMatching(attendee, sponsors, event);
             
-            await addDoc(collection(db, 'matches'), {
+            await addDoc(collection(db, 'matches'), sanitizeForFirestore({
               eventId,
               attendeeId: attendee.id,
               attendeeName: attendee.name || '',
@@ -162,7 +196,7 @@ function EventDetailPage() {
               emailSubject: result.subject || '',
               emailStatus: 'pending',
               createdAt: new Date()
-            });
+            }));
             
             console.log(`✅ Success: ${attendee.name}`);
             
@@ -238,6 +272,10 @@ function EventDetailPage() {
       const chunk = items.slice(i, i + batchSize);
       const chunkResults = await Promise.all(chunk.map(fn));
       results.push(...chunkResults);
+
+      if (i + batchSize < items.length) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      }
     }
     return results;
   }
@@ -249,7 +287,7 @@ function EventDetailPage() {
   try {
     // Process attendees — each upsert returns true (new) or false (duplicate)
     const attendeeResults = await processInBatches(
-        uploadAttendeesData, 10, attendee =>
+        uploadAttendeesData, 5, attendee =>
         upsertAttendee(eventId, {
           name: attendee.full_name || attendee.name || '',
           email: attendee.email || '',
@@ -261,7 +299,7 @@ function EventDetailPage() {
 
     // Process sponsors — same pattern
     const sponsorResults = await processInBatches(
-        uploadSponsorsData, 10, sponsor =>
+        uploadSponsorsData, 5, sponsor =>
         upsertSponsor(eventId, {
           companyName: sponsor.sponsor_name || sponsor.company_name || '',
           domain: sponsor.company_domain || sponsor.domain || '',
@@ -275,11 +313,20 @@ function EventDetailPage() {
     const dupAttendees = attendeeResults.length - newAttendees;
     const newSponsors = sponsorResults.filter(Boolean).length;
     const dupSponsors = sponsorResults.length - newSponsors;
-
+    
     await updateDoc(doc(db, 'events', eventId), {
       attendeeCount: attendees.length + newAttendees,
       sponsorCount: sponsors.length + newSponsors
     });
+
+    if (newSponsors > 0) {
+      // Sponsors changed — invalidate all cached matches for this event
+      const matchesQuery = query(collection(db, 'matches'), where('eventId', '==', eventId));
+      const matchesSnapshot = await getDocs(matchesQuery);
+      const batch = writeBatch(db);
+      matchesSnapshot.docs.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+    }
 
     // Build a readable summary message
     const parts = [];

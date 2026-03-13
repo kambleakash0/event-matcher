@@ -66,7 +66,7 @@ JSON:
     
     return {
       sponsor: sponsor.companyName,
-      matchScore: 85, // Will be set by Agent 2
+      matchScore: matchData?.score || 85, // Will be set by Agent 2
       ...narrative
     };
     

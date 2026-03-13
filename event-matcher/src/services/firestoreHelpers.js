@@ -1,5 +1,6 @@
 import { db } from './firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { buildSponsorText, buildAttendeeText, generateEmbedding } from './embeddingService';
 
 // Builds a predictable sponsor ID
 export function buildSponsorId(eventId, companyName) {
@@ -29,13 +30,14 @@ export async function upsertAttendee(eventId, attendeeData) {
   const id = buildAttendeeId(eventId, attendeeData.email);
   const ref = doc(db, 'attendees', id);
   const existing = await getDoc(ref);
+  const isNew = !existing.exists();
   await setDoc(ref, {
     eventId,
     ...attendeeData,
-    ...(existing.exists() ? {} : { createdAt: new Date() }),
+    ...(isNew ? {createdAt: new Date()} : {}),
     updatedAt: new Date()
   }, { merge: true });
-  return !existing.exists(); // true = new, false = duplicate
+  return isNew; // true = new, false = duplicate
 }
 
 // Returns true if newly created, false if it already existed (duplicate)
@@ -43,11 +45,17 @@ export async function upsertSponsor(eventId, sponsorData) {
   const id = buildSponsorId(eventId, sponsorData.companyName);
   const ref = doc(db, 'sponsors', id);
   const existing = await getDoc(ref);
+  const isNew = !existing.exists();
+  let embedding = null;
+  if (isNew) {
+    const text = buildSponsorText(sponsorData);
+    embedding = await generateEmbedding(text);
+  }
   await setDoc(ref, {
     eventId,
     ...sponsorData,
-    ...(existing.exists() ? {} : { createdAt: new Date() }),
+    ...(isNew ? { createdAt: new Date(), embedding } : {}),
     updatedAt: new Date()
   }, { merge: true });
-  return !existing.exists(); // true = new, false = duplicate
+  return isNew; // true = new, false = duplicate
 }

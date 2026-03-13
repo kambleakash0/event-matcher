@@ -48,16 +48,32 @@ function AdminDashboard() {
     try {
     const q = query(collection(db, 'attendees'), where('eventId', '==', eventId));
     const snapshot = await getDocs(q);
-    const batch = writeBatch(db);
-    snapshot.docs.forEach(d => batch.delete(d.ref));
-    await batch.commit();
+    const CHUNK_SIZE = 10;
+    for (let i = 0; i < snapshot.docs.length; i += CHUNK_SIZE) {
+      const chunk = snapshot.docs.slice(i, i + CHUNK_SIZE);
+      const batch = writeBatch(db);
+      chunk.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+    }
 
     // Delete sponsors
     const q2 = query(collection(db, 'sponsors'), where('eventId', '==', eventId));
     const snapshot2 = await getDocs(q2);
-    const batch2 = writeBatch(db);
-    snapshot2.docs.forEach(d => batch2.delete(d.ref));
-    await batch2.commit();
+    for (let i = 0; i < snapshot2.docs.length; i += CHUNK_SIZE) {
+      const chunk = snapshot2.docs.slice(i, i + CHUNK_SIZE);
+      const batch = writeBatch(db);
+      chunk.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+    }
+
+    const q3 = query(collection(db, 'matches'), where('eventId', '==', eventId));
+    const snapshot3 = await getDocs(q3);
+    for (let i = 0; i < snapshot3.docs.length; i += CHUNK_SIZE) {
+      const chunk = snapshot3.docs.slice(i, i + CHUNK_SIZE);
+      const batch = writeBatch(db);
+      chunk.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+    }
     
     // Delete event
     await deleteDoc(doc(db, 'events', eventId));

@@ -1,16 +1,5 @@
-/**
- * AGENT 2: ULTRA-FAST RELEVANCE SCORER
- * Target: 500ms for all sponsors
- * 
- * OPTIMIZATIONS:
- * - Pre-filter to top 8 candidates (vs 20+)
- * - Parallel scoring of only 8 sponsors
- * - Reduced max_tokens: 100 → 50
- * - Simplified scoring prompt
- * - Skip LLM for obvious mismatches
- */
-
 import { preFilterSponsors } from './smartSponsorFilter.js';
+import { findTopSponsors } from './similarityService.js';
 
 const OPENROUTER_KEY = import.meta.env.VITE_OPENROUTER_KEY;
 
@@ -145,7 +134,12 @@ export async function batchScoreSponsors(attendeeAnalysis, sponsors) {
 /**
  * Get top N sponsors (ultra-fast)
  */
-export async function getTopRelevantSponsors(attendeeAnalysis, sponsors, topN = 4) {
+export async function getTopRelevantSponsors(attendeeAnalysis, sponsors, topN = 4, attendeeEmbedding = null) {
+  if (attendeeEmbedding) {
+    console.log('Using embeddings — no LLM calls');
+    return findTopSponsors(attendeeEmbedding, sponsors, topN);
+  }
+  // Fallback — original LLM scoring if no embedding available
   const relevant = await batchScoreSponsors(attendeeAnalysis, sponsors);
   return relevant.slice(0, topN);
 }

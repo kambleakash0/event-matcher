@@ -1,6 +1,6 @@
 /**
- * AGENT 5: SCHEDULE OPTIMIZER
- * Creates optimal event schedule based on match priorities
+ * AGENT 6: TIPS GENERATOR
+ * Creates actionable tips and after-event follow-up advice
  * Runs once per attendee
  * Uses OpenRouter API
  */
@@ -23,8 +23,8 @@ async function callOpenRouter(prompt, model = "openai/gpt-4o-mini") {
         },
         { role: "user", content: prompt }
       ],
-      temperature: 0.5,
-      max_tokens: 400  // Increased from 250 to allow complete JSON
+      temperature: 0.6,
+      max_tokens: 300  // Increased from 200 to allow complete JSON
     })
   });
 
@@ -33,65 +33,61 @@ async function callOpenRouter(prompt, model = "openai/gpt-4o-mini") {
   return data.choices?.[0]?.message?.content || "";
 }
 
-export async function createEventSchedule(topMatches, attendeeAnalysis, event) {
-  console.log("🤖 Agent 5: Creating event schedule...");
-
-  const matchesSummary = topMatches.map((m, i) => 
-    `${i + 1}. ${m.sponsor} (Score: ${m.matchScore}/100, Goal: ${attendeeAnalysis.primaryGoal})`
-  ).join('\n');
-
-  // Extract event timing
-  const eventStartTime = event.startTime || event.start_time || "9:00 AM";
-  const eventEndTime = event.endTime || event.end_time || "5:00 PM";
-  const eventDuration = event.duration || "full day";
+export async function generateTipsAndFollowup(attendeeAnalysis, topMatches) {
+  console.log("🤖 Agent 6: Generating tips and follow-up advice...");
 
   const prompt = `You are a JSON-only API. Respond with ONLY valid JSON, no explanations.
 
-ATTENDEE:
+ATTENDEE PROFILE:
 Primary Goal: ${attendeeAnalysis.primaryGoal}
+Secondary Goals: ${attendeeAnalysis.secondaryGoals?.join(', ') || 'None'}
 Role Level: ${attendeeAnalysis.roleLevel}
+Technical Profile: ${attendeeAnalysis.technicalProfile}
+Industries: ${attendeeAnalysis.industries?.join(', ') || 'General'}
+Summary: ${attendeeAnalysis.summary}
 
-TOP MATCHES:
-${matchesSummary}
+TOP SPONSOR MATCHES (in priority order):
+${topMatches.map((m, i) => `${i + 1}. ${m.sponsor} (Score: ${m.matchScore}/100)
+   - Why relevant: ${m.whyYou?.substring(0, 100)}...
+   - Who to meet: ${m.whoToMeet} (${m.theirRole})`).join('\n\n')}
 
-EVENT DETAILS:
-Name: ${event.name || 'Event'}
-Date: ${event.date || 'TBA'}
-Start Time: ${eventStartTime}
-End Time: ${eventEndTime}
-Duration: ${eventDuration}
+TASK: Generate highly specific, actionable advice tailored to THIS attendee's situation.
 
-Create a strategic schedule that fits EXACTLY within the event timing above. Return ONLY this JSON array (no markdown, no explanation):
-[
-  {
-    "time": "9:00 - 10:00 AM",
-    "activity": "Visit [Sponsor Name] booth",
-    "reason": "Why this timing is strategic"
-  }
-]
+Return ONLY this JSON object (no markdown, no explanation):
+{
+  "proTips": [
+    "Specific tip 1 based on their ${attendeeAnalysis.primaryGoal} goal and ${attendeeAnalysis.roleLevel} level",
+    "Specific tip 2 mentioning actual sponsor names from the list above",
+    "Specific tip 3 about how to maximize their time at the event",
+    "Specific tip 4 related to their technical profile: ${attendeeAnalysis.technicalProfile}"
+  ],
+  "afterEvent": [
+    "Specific follow-up action 1 mentioning actual sponsor names",
+    "Specific follow-up action 2 based on their ${attendeeAnalysis.primaryGoal} goal",
+    "Specific follow-up action 3 for building relationships with ${topMatches[0]?.sponsor || 'top matches'}"
+  ]
+}
 
-Guidelines:
-- MUST start at or after ${eventStartTime}
-- MUST end at or before ${eventEndTime}
-- Visit highest-priority sponsors first (when attendee is fresh)
-- Include breaks if event is longer than 4 hours
-- Include networking time
-- Include 4-6 time blocks that fit the event duration
-- Use actual sponsor names from the top matches list
-- NO markdown, NO explanations, ONLY the JSON array`;
+CRITICAL REQUIREMENTS:
+- Be ULTRA-SPECIFIC: Use actual sponsor names (${topMatches.map(m => m.sponsor).join(', ')})
+- Reference their actual goal: ${attendeeAnalysis.primaryGoal}
+- Mention their role level: ${attendeeAnalysis.roleLevel}
+- Reference actual people they'll meet: ${topMatches.map(m => m.whoToMeet).filter(Boolean).join(', ')}
+- Make tips actionable and concrete, NOT generic advice
+- NO markdown, NO explanations, ONLY the JSON object`;
 
   try {
     const text = await callOpenRouter(prompt);
     
     // Try multiple extraction methods
-    let schedule = null;
+    let tips = null;
     
     // Method 1: Direct JSON parse (if response is pure JSON)
     try {
-      schedule = JSON.parse(text.trim());
-      if (Array.isArray(schedule)) {
-        console.log(`✅ Agent 5 complete: Created ${schedule.length} time blocks`);
-        return schedule;
+      tips = JSON.parse(text.trim());
+      if (tips.proTips && tips.afterEvent) {
+        console.log(`✅ Agent 6 complete: Generated ${tips.proTips.length} tips`);
+        return tips;
       }
     } catch (e) {
       // Not pure JSON, continue to next method
@@ -101,152 +97,156 @@ Guidelines:
     const codeBlockMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
     if (codeBlockMatch) {
       try {
-        schedule = JSON.parse(codeBlockMatch[1].trim());
-        if (Array.isArray(schedule)) {
-          console.log(`✅ Agent 5 complete: Created ${schedule.length} time blocks`);
-          return schedule;
+        tips = JSON.parse(codeBlockMatch[1].trim());
+        if (tips.proTips && tips.afterEvent) {
+          console.log(`✅ Agent 6 complete: Generated ${tips.proTips.length} tips`);
+          return tips;
         }
       } catch (e) {
         // Continue to next method
       }
     }
     
-    // Method 3: Find JSON array in text - use greedy match to get complete array
-    const arrayMatch = text.match(/\[\s*\{[\s\S]*?\}\s*\]/);
-    if (arrayMatch) {
-      try {
-        schedule = JSON.parse(arrayMatch[0]);
-        if (Array.isArray(schedule)) {
-          console.log(`✅ Agent 5 complete: Created ${schedule.length} time blocks`);
-          return schedule;
+    // Method 3: Find JSON object in text - use greedy match
+    const objectMatch = text.match(/\{\s*"proTips"[\s\S]*?"afterEvent"[\s\S]*?\]/);
+    if (objectMatch) {
+      // Find the closing brace
+      let braceCount = 0;
+      let endIdx = -1;
+      for (let i = 0; i < objectMatch[0].length; i++) {
+        if (objectMatch[0][i] === '{') braceCount++;
+        if (objectMatch[0][i] === '}') {
+          braceCount--;
+          if (braceCount === 0) {
+            endIdx = i;
+            break;
+          }
         }
-      } catch (e) {
-        console.warn("⚠️ Agent 5: Found array but couldn't parse:", e.message);
+      }
+      
+      if (endIdx !== -1) {
+        try {
+          tips = JSON.parse(objectMatch[0].substring(0, endIdx + 1));
+          if (tips.proTips && tips.afterEvent) {
+            console.log(`✅ Agent 6 complete: Generated ${tips.proTips.length} tips`);
+            return tips;
+          }
+        } catch (e) {
+          console.warn("⚠️ Agent 6: Found object but couldn't parse:", e.message);
+        }
       }
     }
     
-    // Method 4: More aggressive extraction - find last complete ]
-    const startIdx = text.indexOf('[');
-    const endIdx = text.lastIndexOf(']');
+    // Method 4: More aggressive extraction
+    const startIdx = text.indexOf('{');
+    const endIdx = text.lastIndexOf('}');
     if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
       try {
-        schedule = JSON.parse(text.substring(startIdx, endIdx + 1));
-        if (Array.isArray(schedule)) {
-          console.log(`✅ Agent 5 complete: Created ${schedule.length} time blocks`);
-          return schedule;
+        tips = JSON.parse(text.substring(startIdx, endIdx + 1));
+        if (tips.proTips && tips.afterEvent) {
+          console.log(`✅ Agent 6 complete: Generated ${tips.proTips.length} tips`);
+          return tips;
         }
       } catch (e) {
-        console.warn("⚠️ Agent 5: Aggressive extraction failed:", e.message);
+        console.warn("⚠️ Agent 6: Aggressive extraction failed:", e.message);
       }
     }
     
     // All methods failed
-    console.warn("⚠️ Agent 5: Could not parse JSON, using template");
+    console.warn("⚠️ Agent 6: Could not parse JSON, using template");
     console.log("Full response was:", text);
-    throw new Error("No valid JSON array in response");
+    throw new Error("No valid JSON in response");
     
   } catch (error) {
-    console.error("❌ Agent 5 failed:", error);
-    return generateTemplateSchedule(topMatches, attendeeAnalysis, event);
+    console.error("❌ Agent 6 failed:", error);
+    return generateTemplateTips(attendeeAnalysis, topMatches);
   }
 }
 
-function generateTemplateSchedule(topMatches, attendeeAnalysis, event) {
-  const schedule = [];
+function generateTemplateTips(attendeeAnalysis, topMatches) {
+  const tips = { proTips: [], afterEvent: [] };
   
-  // Extract event timing with fallbacks
-  let startHour = 9; // Default 9 AM
-  let endHour = 17; // Default 5 PM
+  const primaryGoal = attendeeAnalysis.primaryGoal;
+  const roleLevel = attendeeAnalysis.roleLevel;
+  const technical = attendeeAnalysis.technicalProfile;
+  const topSponsor = topMatches[0]?.sponsor || 'your top matches';
+  const secondSponsor = topMatches[1]?.sponsor || 'key sponsors';
+  const topPerson = topMatches[0]?.whoToMeet || 'team representatives';
   
-  // Try to parse start time
-  if (event.startTime || event.start_time) {
-    const timeStr = event.startTime || event.start_time;
-    const match = timeStr.match(/(\d+)/);
-    if (match) startHour = parseInt(match[1]);
-  }
-  
-  // Try to parse end time
-  if (event.endTime || event.end_time) {
-    const timeStr = event.endTime || event.end_time;
-    const match = timeStr.match(/(\d+)/);
-    if (match) {
-      endHour = parseInt(match[1]);
-      // Handle PM times
-      if (timeStr.toLowerCase().includes('pm') && endHour < 12) {
-        endHour += 12;
-      }
-    }
-  }
-  
-  let currentHour = startHour;
-  
-  // Visit top priority sponsors first
-  topMatches.slice(0, Math.min(2, topMatches.length)).forEach((match, i) => {
-    if (currentHour < endHour - 1) {
-      const endBlock = currentHour + 1;
-      const period = currentHour < 12 ? 'AM' : 'PM';
-      const displayHour = currentHour > 12 ? currentHour - 12 : currentHour;
+  // Generate goal-specific tips
+  switch (primaryGoal) {
+    case 'job_hunting':
+    case 'intern':
+      tips.proTips = [
+        `Bring 5-10 printed copies of your resume to hand to ${topSponsor} and ${secondSponsor}`,
+        `Research ${topSponsor}'s open positions before the event - they scored ${topMatches[0]?.matchScore}/100 for you`,
+        `Prepare a 30-second elevator pitch highlighting your ${roleLevel}-level experience in ${technical === 'technical' ? 'technical' : 'your'} field`,
+        `Ask ${topPerson} at ${topSponsor} about team structure and growth opportunities, not just job descriptions`
+      ];
+      tips.afterEvent = [
+        `Send personalized LinkedIn connection requests to ${topPerson} and other ${topSponsor} representatives within 24 hours`,
+        `Follow up via email with ${topSponsor} and ${secondSponsor} referencing specific conversation points within 48 hours`,
+        `Apply to any mentioned positions at ${topMatches.slice(0, 3).map(m => m.sponsor).join(', ')} and reference your conversations in cover letters`
+      ];
+      break;
       
-      schedule.push({
-        time: `${displayHour}:00 - ${displayHour + 1}:00 ${period}`,
-        activity: `Visit ${match.sponsor} booth`,
-        reason: i === 0 
-          ? "Your top match - visit first when you're most energized"
-          : "High-priority match while you're still fresh"
-      });
-      currentHour++;
-    }
-  });
-  
-  // Add networking break if time permits
-  if (currentHour < endHour - 2 && endHour - startHour > 4) {
-    const period = currentHour < 12 ? 'AM' : 'PM';
-    const displayHour = currentHour > 12 ? currentHour - 12 : currentHour;
-    
-    schedule.push({
-      time: `${displayHour}:00 - ${displayHour}:30 ${period}`,
-      activity: "Networking break / Coffee",
-      reason: "Process what you've learned and prepare for next conversations"
-    });
-    currentHour++;
-  }
-  
-  // Add remaining sponsors if time permits
-  const remainingSponsors = topMatches.slice(2, 4);
-  remainingSponsors.forEach((match) => {
-    if (currentHour < endHour - 1) {
-      const period = currentHour < 12 ? 'AM' : 'PM';
-      const displayHour = currentHour > 12 ? currentHour - 12 : currentHour;
+    case 'learning':
+      tips.proTips = [
+        `Prepare specific technical questions about ${topSponsor}'s ${technical === 'technical' ? 'technology stack and architecture' : 'products and approach'}`,
+        `Take detailed notes when talking to ${topPerson} at ${topSponsor} - they're your highest match at ${topMatches[0]?.matchScore}/100`,
+        `Ask ${topSponsor} and ${secondSponsor} for documentation, tutorials, or demo access to explore after the event`,
+        `Focus on understanding how ${topMatches.slice(0, 2).map(m => m.sponsor).join(' and ')} solve problems in their domain`
+      ];
+      tips.afterEvent = [
+        `Review and organize your notes from ${topSponsor}, ${secondSponsor}, and ${topMatches[2]?.sponsor || 'other sponsors'} while details are fresh`,
+        `Sign up for newsletters and communities mentioned by ${topSponsor} and follow their engineering blogs`,
+        `Start a small project using what you learned from ${topSponsor} to solidify your knowledge`
+      ];
+      break;
       
-      schedule.push({
-        time: `${displayHour}:00 - ${displayHour + 1}:00 ${period}`,
-        activity: `Visit ${match.sponsor} booth`,
-        reason: "Strong match - good time to explore their offerings"
-      });
-      currentHour++;
-    }
-  });
-  
-  // Add lunch if it's a full day event
-  if (endHour - startHour >= 6 && currentHour >= 12 && currentHour < 14) {
-    schedule.push({
-      time: "12:00 - 1:00 PM",
-      activity: "Lunch / Informal networking",
-      reason: "Build relationships in a casual setting"
-    });
+    case 'networking':
+    case 'partnerships':
+      tips.proTips = [
+        `Bring business cards or have a digital card ready when meeting ${topPerson} at ${topSponsor}`,
+        `Research ${topSponsor}'s recent partnerships and initiatives - look for collaboration opportunities`,
+        `At ${secondSponsor}, focus on building genuine connections with their ${topMatches[1]?.whoToMeet || 'team'} rather than just collecting contacts`,
+        `Look for common interests with ${topMatches.slice(0, 3).map(m => m.sponsor).join(', ')} teams to build rapport`
+      ];
+      tips.afterEvent = [
+        `Connect on LinkedIn with ${topPerson} from ${topSponsor} and ${topMatches[1]?.whoToMeet || 'representatives'} from ${secondSponsor}`,
+        `Send personalized follow-up messages to ${topSponsor} and ${secondSponsor} mentioning specific discussion topics within 24-48 hours`,
+        `Look for ways to provide value to your new connections at ${topMatches.slice(0, 2).map(m => m.sponsor).join(' and ')}`
+      ];
+      break;
+      
+    case 'investment':
+    case 'funding':
+      tips.proTips = [
+        `Prepare your elevator pitch tailored to ${topSponsor}'s investment thesis and portfolio`,
+        `Research ${topSponsor} and ${secondSponsor}'s recent investments and portfolio companies beforehand`,
+        `Ask ${topPerson} at ${topSponsor} about their decision-making process and what makes them excited about opportunities`,
+        `Bring a concise deck or one-pager about your venture to share with ${topMatches.slice(0, 3).map(m => m.sponsor).join(', ')}`
+      ];
+      tips.afterEvent = [
+        `Send a follow-up email to ${topPerson} at ${topSponsor} with your pitch deck and key metrics within 24 hours`,
+        `Connect with ${topSponsor} and ${secondSponsor} teams on LinkedIn and engage with their content`,
+        `Schedule follow-up calls with interested parties from ${topMatches.map(m => m.sponsor).join(', ')}`
+      ];
+      break;
+      
+    default:
+      tips.proTips = [
+        `Arrive early to visit ${topSponsor} (your top match at ${topMatches[0]?.matchScore}/100) before crowds form`,
+        `Prepare 2-3 specific questions for ${topPerson} at ${topSponsor} about their work and offerings`,
+        `Take notes on key insights from ${topMatches.slice(0, 3).map(m => m.sponsor).join(', ')}`,
+        `Ask for business cards or contact information from ${topSponsor} and ${secondSponsor} for follow-up`
+      ];
+      tips.afterEvent = [
+        `Send thank-you messages to ${topPerson} and other contacts from ${topSponsor} within 24 hours`,
+        `Review your notes from ${topMatches.slice(0, 3).map(m => m.sponsor).join(', ')} and identify actionable next steps`,
+        `Follow up on any commitments or promises made during conversations with ${topSponsor} and ${secondSponsor}`
+      ];
   }
   
-  // Add follow-up time towards the end
-  if (currentHour < endHour - 1) {
-    const period = currentHour < 12 ? 'AM' : 'PM';
-    const displayHour = currentHour > 12 ? currentHour - 12 : currentHour;
-    
-    schedule.push({
-      time: `${displayHour}:00 - ${displayHour + 1}:00 ${period}`,
-      activity: "Follow-up conversations / Ask remaining questions",
-      reason: "Revisit sponsors to clarify or discuss next steps"
-    });
-  }
-  
-  return schedule;
+  return tips;
 }

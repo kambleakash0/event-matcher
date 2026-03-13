@@ -1,28 +1,10 @@
-/**
- * FULL LLM AGENTIC MATCHING ORCHESTRATOR
- * Uses ALL 6 agents with LLM calls (no templates)
- * 
- * Agents 5 & 6 use LLM for personalized schedule and tips
- * Target: 6-8 seconds (slower but higher quality)
- */
-
 import { getAttendeeAnalysis } from './agent1_openrouter.js';
 import { getTopRelevantSponsors } from './agent2_openrouter.js';
 import { generateMultipleNarratives } from './agent3_openrouter.js';
-import { createEventSchedule } from './agent5_openrouter.js';
-import { generateTipsAndFollowup } from './agent6_openrouter.js';
+import { createEventSchedule } from './agent4_openrouter.js';
+import { generateTipsAndFollowup } from './agent5_openrouter.js';
+import { buildAttendeeText, generateEmbedding } from './embeddingService';
 
-/**
- * FULL LLM MATCHING - ALL AGENTS USE LLM
- * 
- * Strategy:
- * 1. Run Agent 1 (LLM profile analysis)
- * 2. Run Agent 2 (LLM sponsor scoring with pre-filtering)
- * 3. Run Agent 3 (LLM narratives in parallel)
- * 4. SKIP Agent 4 (fact checking)
- * 5. Run Agent 5 (LLM schedule generation) ← REAL LLM
- * 6. Run Agent 6 (LLM tips generation) ← REAL LLM
- */
 export async function runAgenticMatching(attendee, sponsors, event) {
   console.log("🤖 FULL LLM MATCHING (All 6 Agents)");
   console.log("=" .repeat(50));
@@ -33,16 +15,21 @@ export async function runAgenticMatching(attendee, sponsors, event) {
     // STAGE 1: Profile Analysis (LLM)
     console.log("\n📊 STAGE 1: Profile Analysis (LLM)");
     const stage1Start = Date.now();
-    const attendeeAnalysis = await getAttendeeAnalysis(attendee);
+    const [attendeeAnalysis, attendeeEmbedding] = await Promise.all([
+      getAttendeeAnalysis(attendee),
+      generateEmbedding(buildAttendeeText(attendee))
+    ]);
     console.log(`   ✅ ${Date.now() - stage1Start}ms - ${attendeeAnalysis.primaryGoal} / ${attendeeAnalysis.roleLevel}`);
     
     // STAGE 2: Sponsor Scoring (LLM with pre-filtering)
     console.log("\n🎯 STAGE 2: Relevance Scoring (LLM)");
     const stage2Start = Date.now();
+
     const topMatches = await getTopRelevantSponsors(
       attendeeAnalysis,
       sponsors,
-      4 // Top 4 only
+      4, // Top 4 only
+      attendeeEmbedding
     );
     console.log(`   ✅ ${Date.now() - stage2Start}ms - ${topMatches.length} matches found`);
     
@@ -64,16 +51,13 @@ export async function runAgenticMatching(attendee, sponsors, event) {
     // STAGE 4: SKIPPED (fact checking unnecessary with good prompts)
     
     // STAGE 5: Schedule Generation (LLM) ← USING REAL AGENT 5
-    console.log("\n📅 STAGE 5: Schedule (LLM)");
+    console.log("\n📅 STAGE 5: Schedule (LLM) and 💡 STAGE 6: Tips (LLM)");
     const stage5Start = Date.now();
-    const schedule = await createEventSchedule(narratives, attendeeAnalysis, event);
+    const [schedule, tips] = await Promise.all([
+      createEventSchedule(narratives, attendeeAnalysis, event),
+      generateTipsAndFollowup(attendeeAnalysis, narratives)
+    ]);
     console.log(`   ✅ ${Date.now() - stage5Start}ms - ${schedule.length} blocks`);
-    
-    // STAGE 6: Tips Generation (LLM) ← USING REAL AGENT 6
-    console.log("\n💡 STAGE 6: Tips (LLM)");
-    const stage6Start = Date.now();
-    const tips = await generateTipsAndFollowup(attendeeAnalysis, narratives);
-    console.log(`   ✅ ${Date.now() - stage6Start}ms`);
     
     // Compile result
     const result = {
