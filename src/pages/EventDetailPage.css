@@ -107,6 +107,11 @@
   color: var(--text-primary);
 }
 
+.event-info {
+  padding: 0 20px;
+  flex: 1;
+}
+
 .event-info h1 {
   font-size: 32px;
   font-weight: 700;

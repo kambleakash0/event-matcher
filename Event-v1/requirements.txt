@@ -1,8 +1,0 @@
-mcp[cli]>=1.0.0
-sqlalchemy>=2.0.0
-alembic>=1.13.0
-pytest>=9.0.0
-pandas>=2.0.0
-openpyxl>=3.1.0
-streamlit>=1.31.0
-firebase-admin>=6.4.0

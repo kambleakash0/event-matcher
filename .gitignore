@@ -1,3 +1,4 @@
+### Node ###
 # Logs
 logs
 *.log
@@ -137,15 +138,18 @@ dist
 # SvelteKit build / generate output
 .svelte-kit
 
-# custom ignores
+# Firebase
+.firebase/
+
+# Editor directories and files
+.agent/
 .vscode/*
 !.vscode/extensions.json
-event_matcher.db
-.agent
+.idea
 .DS_Store
-
-# filebase specific
-serviceAccountKey.json
-.firebaserc
-firebase.json
-.firebase/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.env
