@@ -111,7 +111,7 @@ async function findMatches(state) {
   };
 
   try {
-    const attendeeEmbedding = attendee.embedding || (await db.collection('attendeeAnalysis').doc(attendee.id).get()).data()?.embedding;
+    const attendeeEmbedding = attendee.embedding || (await db.collection('attendees').doc(attendee.id).get()).data()?.embedding;
 
     if (attendeeEmbedding) {
       const scored = sponsors
