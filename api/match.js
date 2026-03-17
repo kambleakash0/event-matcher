@@ -360,13 +360,27 @@ export function createScheduleNode(state) {
 
 function generateTemplateTips(attendeeAnalysis, topMatches) {
   const tips = { proTips: [], afterEvent: [] };
+
+  // Safely derive a readable sponsor name from the match shape { sponsor, score }
+  const getSponsorName = (match) => {
+    if (!match || !match.sponsor) return null;
+    const sponsor = match.sponsor;
+    if (typeof sponsor === 'string') {
+      return sponsor;
+    }
+    if (typeof sponsor === 'object') {
+      return sponsor.companyName || sponsor.name || String(sponsor);
+    }
+    return String(sponsor);
+  };
   
   const primaryGoal = attendeeAnalysis.primaryGoal;
   const roleLevel = attendeeAnalysis.roleLevel;
   const technical = attendeeAnalysis.technicalProfile;
-  const topSponsor = topMatches[0]?.sponsor || 'your top matches';
-  const secondSponsor = topMatches[1]?.sponsor || 'key sponsors';
-  const topPerson = topMatches[0]?.whoToMeet || 'team representatives';
+  const topSponsor = getSponsorName(topMatches[0]) || 'your top matches';
+  const secondSponsor = getSponsorName(topMatches[1]) || 'key sponsors';
+  // In this code path, `topMatches` does not contain `whoToMeet`, so keep this generic
+  const topPerson = 'team representatives';
   
   // Generate goal-specific tips
   switch (primaryGoal) {
@@ -374,26 +388,26 @@ function generateTemplateTips(attendeeAnalysis, topMatches) {
     case 'intern':
       tips.proTips = [
         `Bring 5-10 printed copies of your resume to hand to ${topSponsor} and ${secondSponsor}`,
-        `Research ${topSponsor}'s open positions before the event - they scored ${topMatches[0]?.matchScore}/100 for you`,
+        `Research ${topSponsor}'s open positions before the event - they scored ${topMatches[0]?.score}/100 for you`,
         `Prepare a 30-second elevator pitch highlighting your ${roleLevel}-level experience in ${technical === 'technical' ? 'technical' : 'your'} field`,
         `Ask ${topPerson} at ${topSponsor} about team structure and growth opportunities, not just job descriptions`
       ];
       tips.afterEvent = [
         `Send personalized LinkedIn connection requests to ${topPerson} and other ${topSponsor} representatives within 24 hours`,
         `Follow up via email with ${topSponsor} and ${secondSponsor} referencing specific conversation points within 48 hours`,
-        `Apply to any mentioned positions at ${topMatches.slice(0, 3).map(m => m.sponsor).join(', ')} and reference your conversations in cover letters`
+        `Apply to any mentioned positions at ${topMatches.slice(0, 3).map(getSponsorName).join(', ')} and reference your conversations in cover letters`
       ];
       break;
       
     case 'learning':
       tips.proTips = [
         `Prepare specific technical questions about ${topSponsor}'s ${technical === 'technical' ? 'technology stack and architecture' : 'products and approach'}`,
-        `Take detailed notes when talking to ${topPerson} at ${topSponsor} - they're your highest match at ${topMatches[0]?.matchScore}/100`,
+        `Take detailed notes when talking to ${topPerson} at ${topSponsor} - they're your highest match at ${topMatches[0]?.score}/100`,
         `Ask ${topSponsor} and ${secondSponsor} for documentation, tutorials, or demo access to explore after the event`,
-        `Focus on understanding how ${topMatches.slice(0, 2).map(m => m.sponsor).join(' and ')} solve problems in their domain`
+        `Focus on understanding how ${topMatches.slice(0, 2).map(getSponsorName).join(' and ')} solve problems in their domain`
       ];
       tips.afterEvent = [
-        `Review and organize your notes from ${topSponsor}, ${secondSponsor}, and ${topMatches[2]?.sponsor || 'other sponsors'} while details are fresh`,
+        `Review and organize your notes from ${topSponsor}, ${secondSponsor}, and ${getSponsorName(topMatches[2]) || 'other sponsors'} while details are fresh`,
         `Sign up for newsletters and communities mentioned by ${topSponsor} and follow their engineering blogs`,
         `Start a small project using what you learned from ${topSponsor} to solidify your knowledge`
       ];
