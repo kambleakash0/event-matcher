@@ -1,8 +1,41 @@
 export function cosineSimilarity(a, b) {
-  const dot = a.reduce((sum, val, i) => sum + val * b[i], 0);
-  const magA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0));
-  const magB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0));
-  return dot / (magA * magB);
+  // Defensive checks to avoid NaN/Infinity from invalid inputs
+  if (!Array.isArray(a) || !Array.isArray(b)) {
+    return 0;
+  }
+  if (a.length === 0 || b.length === 0) {
+    return 0;
+  }
+  // Require equal lengths so we never read b[i] as undefined
+  if (a.length !== b.length) {
+    return 0;
+  }
+
+  let dot = 0;
+  let sumSqA = 0;
+  let sumSqB = 0;
+  for (let i = 0; i < a.length; i++) {
+    const valA = a[i];
+    const valB = b[i];
+    dot += valA * valB;
+    sumSqA += valA * valA;
+    sumSqB += valB * valB;
+  }
+
+  const magA = Math.sqrt(sumSqA);
+  const magB = Math.sqrt(sumSqB);
+
+  if (magA === 0 || magB === 0) {
+    return 0;
+  }
+
+  const raw = dot / (magA * magB);
+  if (!Number.isFinite(raw)) {
+    return 0;
+  }
+
+  // Clamp to valid cosine range [-1, 1]
+  return Math.max(-1, Math.min(1, raw));
 }
 
 export function findTopSponsors(attendeeEmbedding, sponsors, topN = 4) {
