@@ -12,7 +12,20 @@ export async function runMatching(attendee, sponsors, event) {
 
   if (!attendee.embedding) {
     try {
-      const text = buildAttendeeText({}, attendee);
+      const {
+        name,
+        title,
+        company,
+        intent,
+        interests,
+        goals
+      } = attendee || {};
+
+      const fallbackParts = [name, title, company, intent, interests, goals].filter(Boolean);
+      const text = fallbackParts.length > 0
+        ? fallbackParts.join(' • ')
+        : buildAttendeeText({}, attendee);
+
       const embedding = await generateEmbedding(text);
       attendeeWithEmbedding = { ...attendee, embedding };
       await setDoc(doc(db, 'attendees', attendee.id), { embedding }, { merge: true });
