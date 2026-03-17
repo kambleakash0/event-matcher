@@ -55,6 +55,32 @@ async function scoreSponsorWithLLM(attendeeAnalysis, sponsor) {
   }
 }
 
+// Simple concurrency-limited async mapper to avoid unbounded LLM fan-out
+async function mapWithConcurrencyLimit(items, limit, mapper) {
+  if (!Array.isArray(items) || items.length === 0) {
+    return [];
+  }
+  const results = new Array(items.length);
+  let index = 0;
+
+  async function worker() {
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const currentIndex = index++;
+      if (currentIndex >= items.length) break;
+      results[currentIndex] = await mapper(items[currentIndex], currentIndex);
+    }
+  }
+
+  const workerCount = Math.min(limit, items.length);
+  const workers = [];
+  for (let i = 0; i < workerCount; i++) {
+    workers.push(worker());
+  }
+  await Promise.all(workers);
+  return results;
+}
+
 export async function getTopRelevantSponsors(attendeeAnalysis, sponsors, topN = 4, attendeeEmbedding = null) {
   if (attendeeEmbedding) {
     console.log('Using embeddings — no LLM calls');
@@ -63,8 +89,12 @@ export async function getTopRelevantSponsors(attendeeAnalysis, sponsors, topN = 
     console.warn('⚠️ Embedding path returned no results — falling back to LLM');
   }
   console.log('Using LLM scoring...');
-  const scores = await Promise.all(
-    sponsors.map(sponsor => scoreSponsorWithLLM(attendeeAnalysis, sponsor))
+  // Limit concurrent LLM calls to reduce rate-limit and timeout risk
+  const CONCURRENCY_LIMIT = 5;
+  const scores = await mapWithConcurrencyLimit(
+    sponsors,
+    CONCURRENCY_LIMIT,
+    sponsor => scoreSponsorWithLLM(attendeeAnalysis, sponsor)
   );
   return scores
     .filter(s => s.isRelevant)
