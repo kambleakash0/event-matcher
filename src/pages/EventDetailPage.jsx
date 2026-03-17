@@ -350,9 +350,14 @@ function EventDetailPage() {
       // Sponsors changed — invalidate all cached matches for this event
       const matchesQuery = query(collection(db, 'matches'), where('eventId', '==', eventId));
       const matchesSnapshot = await getDocs(matchesQuery);
-      const batch = writeBatch(db);
-      matchesSnapshot.docs.forEach(d => batch.delete(d.ref));
-      await batch.commit();
+      const matchesDocs = matchesSnapshot.docs;
+      const BATCH_LIMIT = 500;
+      for (let i = 0; i < matchesDocs.length; i += BATCH_LIMIT) {
+        const batch = writeBatch(db);
+        const chunk = matchesDocs.slice(i, i + BATCH_LIMIT);
+        chunk.forEach((d) => batch.delete(d.ref));
+        await batch.commit();
+      }
     }
 
     // Build a readable summary message
