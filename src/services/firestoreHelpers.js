@@ -34,8 +34,7 @@ export async function upsertAttendee(eventId, attendeeData) {
   await setDoc(ref, {
     eventId,
     ...attendeeData,
-    embedding: null,
-    ...(isNew ? {createdAt: new Date()} : {}),
+    ...(isNew ? { embedding: null, createdAt: new Date() } : {}),
     updatedAt: new Date()
   }, { merge: true });
   return isNew; // true = new, false = duplicate
