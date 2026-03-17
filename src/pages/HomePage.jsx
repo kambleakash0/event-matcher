@@ -244,7 +244,7 @@ function HomePage() {
       </section>
 
       <footer className="footer">
-        <p>&copy; 2024 Event Connect | Built for Professional Synergy</p>
+        <p>&copy; 2026 Event Connect | Built for Professional Synergy</p>
       </footer>
     </div>
   );
