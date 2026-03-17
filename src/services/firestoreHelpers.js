@@ -1,6 +1,6 @@
-import { db } from './firebase';
+import { db } from './firebase.js';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { buildSponsorText, buildAttendeeText, generateEmbedding } from './embeddingService';
+import { buildSponsorText, buildAttendeeText, generateEmbedding } from './embeddingService.js';
 
 // Builds a predictable sponsor ID
 export function buildSponsorId(eventId, companyName) {
