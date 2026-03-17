@@ -13,7 +13,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc, collection, query, where, getDocs, addDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../services/firebase';
-import { runMatching } from '../services/gemini';
+import { runMatching } from '../services/matchingOrchestrator';
 import './EventDetailPage.css';
 import { sendMatchEmail } from '../services/email';
 import Papa from 'papaparse';
@@ -266,6 +266,31 @@ function EventDetailPage() {
     setShowBatchModal(false);
   };
 
+  // Helper function to parse array fields from CSV
+  const parseArrayField = (field) => {
+    if (!field) return [];
+    if (Array.isArray(field)) return field;
+    
+    // Try to parse as JSON array
+    try {
+      const parsed = JSON.parse(field);
+      return Array.isArray(parsed) ? parsed : [field];
+    } catch {
+      // If not JSON, split by common delimiters
+      return field.split(/[,;|]/).map(s => s.trim()).filter(Boolean);
+    }
+  };
+
+  const parseTeamField = (field) => {
+    if (!field) return [];
+    const members = parseArrayField(field);
+    return members.map(member => {
+      const match = member.match(/^(.+?)\s*[\(\-]\s*(.+?)[\)]?\s*$/);
+      if (match) return { name: match[1].trim(), title: match[2].trim() };
+      return { name: member.trim(), title: '' };
+    });
+  };
+
   async function processInBatches(items, batchSize, fn) {
     const results = [];
     for (let i = 0; i < items.length; i += batchSize) {
@@ -303,8 +328,10 @@ function EventDetailPage() {
         upsertSponsor(eventId, {
           companyName: sponsor.sponsor_name || sponsor.company_name || '',
           domain: sponsor.company_domain || sponsor.domain || '',
-          promotionType: sponsor.what_are_they_promoting_at_this_event || '',
-          projectName: sponsor.project_or_product_name || ''
+          promotionType: parseArrayField(sponsor.what_are_they_promoting_at_this_event || sponsor.promotion || ''),
+          projectName: sponsor.project_or_product_name || sponsor.project_name || '',
+          attendingTeam: parseTeamField(sponsor.who_is_attending_from_the_company || sponsor.team || ''),
+          eventPageUrl: sponsor.event_page_url || sponsor.page_url || null
         })
     );
 

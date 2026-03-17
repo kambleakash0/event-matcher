@@ -5,7 +5,7 @@ import { db } from '../services/firebase';
 import './MatchResultsPage.css';
 
 // Chat API call (using same providers as your gemini.js)
-const GEMINI_KEY = "AIzaSyBzL3Zfj7ZaSSM2jAmwVT5CK4FYQ8mV1K4";
+const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
 async function sendChatMessage(messages, matchContext) {
   const systemPrompt = `You are a helpful AI assistant for Event Connect. You help attendees get the most out of their event experience.

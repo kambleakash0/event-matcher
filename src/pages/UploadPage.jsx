@@ -41,12 +41,11 @@ function UploadPage() {
       // Fetch the HTML content from the URL
       const proxyUrl = 'https://api.allorigins.win/get?url=';
       const response = await fetch(proxyUrl + encodeURIComponent(eventUrl));
-      const data = await response.json();
-      const html = data.contents;
-
       if (!response.ok) {
         throw new Error(`Failed to fetch URL: ${response.status}`);
       }
+      const data = await response.json();
+      const html = data.contents;
 
       // const html = await response.text();
       
@@ -346,7 +345,7 @@ function UploadPage() {
             domain: sponsor.company_domain || sponsor.domain || '',
             promotionType: parseArrayField(sponsor.what_are_they_promoting_at_this_event || sponsor.promotion || ''),
             projectName: sponsor.project_or_product_name || sponsor.project_name || '',
-            attendingTeam: parseArrayField(sponsor.who_is_attending_from_the_company || sponsor.team || ''),
+            attendingTeam: parseTeamField(sponsor.who_is_attending_from_the_company || sponsor.team || ''),
             eventPageUrl: sponsor.event_page_url || sponsor.page_url || null
           })
       );
@@ -380,6 +379,16 @@ function UploadPage() {
       // If not JSON, split by common delimiters
       return field.split(/[,;|]/).map(s => s.trim()).filter(Boolean);
     }
+  };
+
+  const parseTeamField = (field) => {
+    if (!field) return [];
+    const members = parseArrayField(field);
+    return members.map(member => {
+      const match = member.match(/^(.+?)\s*[\(\-]\s*(.+?)[\)]?\s*$/);
+      if (match) return { name: match[1].trim(), title: match[2].trim() };
+      return { name: member.trim(), title: '' };
+    });
   };
 
   return (

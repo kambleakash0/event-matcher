@@ -153,3 +153,4 @@ dist
 *.sln
 *.sw?
 *.env
+.vercel

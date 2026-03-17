@@ -44,42 +44,52 @@ function AdminDashboard() {
     const confirmed = window.confirm('Delete this event and all its attendees and sponsors?');
     if (!confirmed) return;
 
+    const CHUNK_SIZE = 10;
+
+    const batchDelete = async (docs) => {
+      for (let i = 0; i < docs.length; i += CHUNK_SIZE) {
+        const batch = writeBatch(db);
+        docs.slice(i, i + CHUNK_SIZE).forEach(d => batch.delete(d));
+        await batch.commit();
+      }
+    };
+
     // Delete attendees
     try {
-    const q = query(collection(db, 'attendees'), where('eventId', '==', eventId));
-    const snapshot = await getDocs(q);
-    const CHUNK_SIZE = 10;
-    for (let i = 0; i < snapshot.docs.length; i += CHUNK_SIZE) {
-      const chunk = snapshot.docs.slice(i, i + CHUNK_SIZE);
-      const batch = writeBatch(db);
-      chunk.forEach(d => batch.delete(d.ref));
-      await batch.commit();
-    }
+      // Fetch attendees and sponsors first — we need their IDs
+      const [attendeeSnap, sponsorSnap, matchSnap] = await Promise.all([
+        getDocs(query(collection(db, 'attendees'), where('eventId', '==', eventId))),
+        getDocs(query(collection(db, 'sponsors'), where('eventId', '==', eventId))),
+        getDocs(query(collection(db, 'matches'), where('eventId', '==', eventId)))
+      ]);
 
-    // Delete sponsors
-    const q2 = query(collection(db, 'sponsors'), where('eventId', '==', eventId));
-    const snapshot2 = await getDocs(q2);
-    for (let i = 0; i < snapshot2.docs.length; i += CHUNK_SIZE) {
-      const chunk = snapshot2.docs.slice(i, i + CHUNK_SIZE);
-      const batch = writeBatch(db);
-      chunk.forEach(d => batch.delete(d.ref));
-      await batch.commit();
-    }
+      const attendeeIds = attendeeSnap.docs.map(d => d.id);
+      const sponsorIds = sponsorSnap.docs.map(d => d.id);
 
-    const q3 = query(collection(db, 'matches'), where('eventId', '==', eventId));
-    const snapshot3 = await getDocs(q3);
-    for (let i = 0; i < snapshot3.docs.length; i += CHUNK_SIZE) {
-      const chunk = snapshot3.docs.slice(i, i + CHUNK_SIZE);
-      const batch = writeBatch(db);
-      chunk.forEach(d => batch.delete(d.ref));
-      await batch.commit();
-    }
-    
-    // Delete event
-    await deleteDoc(doc(db, 'events', eventId));
+      // Build narrativeCache doc refs: every attendeeId_sponsorId combo
+      const narrativeCacheRefs = attendeeIds.flatMap(aId =>
+        sponsorIds.map(sId => doc(db, 'narrativeCache', `${aId}_${sId}`))
+      );
 
-    // Refresh events list
-    fetchEvents();
+      // Build attendeeAnalysis doc refs
+      const attendeeAnalysisRefs = attendeeIds.map(id =>
+        doc(db, 'attendeeAnalysis', id)
+      );
+
+      // Delete everything in parallel where possible
+      await Promise.all([
+        batchDelete(attendeeSnap.docs.map(d => d.ref)),
+        batchDelete(sponsorSnap.docs.map(d => d.ref)),
+        batchDelete(matchSnap.docs.map(d => d.ref)),
+        batchDelete(attendeeAnalysisRefs),
+        batchDelete(narrativeCacheRefs)
+      ]);
+
+      // Delete the event itself last
+      await deleteDoc(doc(db, 'events', eventId));
+
+      // Refresh events list
+      fetchEvents();
     } catch (error) {
       console.error('Error deleting event:', error);
       alert('Failed to delete event. Please try again.');

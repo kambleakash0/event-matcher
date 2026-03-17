@@ -6,6 +6,10 @@ export function cosineSimilarity(a, b) {
 }
 
 export function findTopSponsors(attendeeEmbedding, sponsors, topN = 4) {
+  const missing = sponsors.filter(s => !s.embedding || s.embedding.length === 0);
+    if (missing.length > 0) {
+      console.warn(`⚠️ ${missing.length} sponsor(s) skipped — no embedding: ${missing.map(s => s.companyName).join(', ')}`);
+    }
   // Implementation for finding top sponsors based on embedding similarity
     return sponsors
     .filter(sponsor => sponsor.embedding && sponsor.embedding.length > 0)

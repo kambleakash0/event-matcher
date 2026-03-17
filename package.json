@@ -12,7 +12,13 @@
   "dependencies": {
     "@emailjs/browser": "^4.4.1",
     "@google/generative-ai": "^0.24.1",
+    "@langchain/core": "^1.1.32",
+    "@langchain/google-genai": "^2.1.25",
+    "@langchain/langgraph": "^1.2.2",
+    "@langchain/openai": "^1.2.13",
+    "@opentelemetry/api": "^1.9.0",
     "firebase": "^12.8.0",
+    "firebase-admin": "^13.7.0",
     "papaparse": "^5.5.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

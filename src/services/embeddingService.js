@@ -1,40 +1,37 @@
+import { GoogleGenerativeAIEmbeddings } from "@langchain/google-genai";
+
 // Builds a predictable sponsor ID
 export function buildSponsorText(sponsorData) {
   let text = sponsorData.companyName?.toLowerCase().trim()+" Domain:"+sponsorData.domain?.toLowerCase().trim()+" Project:"+sponsorData.projectName?.toLowerCase().trim()+" PromotionType:"+(Array.isArray(sponsorData.promotionType) ? sponsorData.promotionType.join(', ') : sponsorData.promotionType || '')+" Team:";
   for (const attendee of sponsorData.attendingTeam || []) {
-    const role = attendee.split('-')[1];
-    if (role) text += role.toLowerCase().trim() + ",";
-  };
+    if (typeof attendee === 'object') {
+      if (attendee.title) text += attendee.title.toLowerCase().trim() + ",";
+    } else {
+      const role = attendee.split('-')[1];
+      if (role) text += role.toLowerCase().trim() + ",";
+    }
+  }
   console.log("Sponsor Text: ", text);
   return text;
 }
 
 // Builds a predictable attendee ID
-export function buildAttendeeText(attendeeData) {
-  let text = attendeeData.name?.toLowerCase().trim()+", "+attendeeData.jobTitle?.toLowerCase().trim()+" at "+attendeeData.company?.toLowerCase().trim()+" Intent:"+attendeeData.intent?.join(',').toLowerCase().trim();
-  console.log("Attendee Text: ", text);
-  return text;
+export function buildAttendeeText(analysis, attendeeData) {
+  return [
+    analysis.summary,
+    `Goal: ${analysis.primaryGoal}`,
+    `Level: ${analysis.roleLevel}`,
+    `Profile: ${analysis.technicalProfile}`,
+    `Keywords: ${(analysis.mustHaves || []).join(', ')}`,
+    `Company: ${attendeeData.company}`
+  ].filter(Boolean).join(' ');
 }
 
+const embeddings = new GoogleGenerativeAIEmbeddings({
+  model: "gemini-embedding-001",
+  apiKey: import.meta.env.VITE_GEMINI_API_KEY
+});
+
 export async function generateEmbedding(text) {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${apiKey}`;
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'models/gemini-embedding-001',
-      content: {
-        parts: [{ text }]
-      }
-    })
-  });
-
-  if (!response.ok) {
-    throw new Error(`Embedding API failed: ${response.status}`);
-  }
-
-  const data = await response.json();
-  return data.embedding.values; // array of ~768 numbers
+  return await embeddings.embedQuery(text);
 }

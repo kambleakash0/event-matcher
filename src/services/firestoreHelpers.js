@@ -34,6 +34,7 @@ export async function upsertAttendee(eventId, attendeeData) {
   await setDoc(ref, {
     eventId,
     ...attendeeData,
+    embedding: null,
     ...(isNew ? {createdAt: new Date()} : {}),
     updatedAt: new Date()
   }, { merge: true });
@@ -47,7 +48,7 @@ export async function upsertSponsor(eventId, sponsorData) {
   const existing = await getDoc(ref);
   const isNew = !existing.exists();
   let embedding = null;
-  if (isNew) {
+  if (isNew || !existing.data()?.embedding) {
     const text = buildSponsorText(sponsorData);
     embedding = await generateEmbedding(text);
   }
@@ -55,6 +56,7 @@ export async function upsertSponsor(eventId, sponsorData) {
     eventId,
     ...sponsorData,
     ...(isNew ? { createdAt: new Date(), embedding } : {}),
+    ...(embedding ? { embedding } : {}),
     updatedAt: new Date()
   }, { merge: true });
   return isNew; // true = new, false = duplicate
