@@ -96,6 +96,8 @@ function HomePage() {
     }
   };
 
+  const currentYear = new Date().getFullYear();
+
   return (
     <div className="home-container">
       <nav className="navbar">
@@ -244,7 +246,7 @@ function HomePage() {
       </section>
 
       <footer className="footer">
-        <p>&copy; 2024 Event Connect | Built for Professional Synergy</p>
+        <p>&copy; {currentYear} Event Connect | Built for Professional Synergy</p>
       </footer>
     </div>
   );
