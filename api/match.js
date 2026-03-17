@@ -300,11 +300,13 @@ export function createScheduleNode(state) {
   const endMinute = endHour * 60;
 
   if (!topMatches || topMatches.length === 0) {
-    return [{
-      time: `${formatHour(startHour)} - ${formatHour(endHour)}`,
-      activity: "Open networking",
-      reason: "No specific sponsor matches — use this time to explore and connect"
-    }];
+    return {
+      schedule: [{
+        time: `${formatHour(startHour)} - ${formatHour(endHour)}`,
+        activity: "Open networking",
+        reason: "No specific sponsor matches — use this time to explore and connect"
+      }]
+    };
   }
   
   // Visit top priority sponsors first
