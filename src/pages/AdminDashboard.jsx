@@ -57,19 +57,14 @@ function AdminDashboard() {
     // Delete attendees
     try {
       // Fetch attendees and sponsors first — we need their IDs
-      const [attendeeSnap, sponsorSnap, matchSnap] = await Promise.all([
+      const [attendeeSnap, sponsorSnap, matchSnap, narrativeCacheSnap] = await Promise.all([
         getDocs(query(collection(db, 'attendees'), where('eventId', '==', eventId))),
         getDocs(query(collection(db, 'sponsors'), where('eventId', '==', eventId))),
-        getDocs(query(collection(db, 'matches'), where('eventId', '==', eventId)))
+        getDocs(query(collection(db, 'matches'), where('eventId', '==', eventId))),
+        getDocs(query(collection(db, 'narrativeCache'), where('eventId', '==', eventId)))
       ]);
 
       const attendeeIds = attendeeSnap.docs.map(d => d.id);
-      const sponsorIds = sponsorSnap.docs.map(d => d.id);
-
-      // Build narrativeCache doc refs: every attendeeId_sponsorId combo
-      const narrativeCacheRefs = attendeeIds.flatMap(aId =>
-        sponsorIds.map(sId => doc(db, 'narrativeCache', `${aId}_${sId}`))
-      );
 
       // Build attendeeAnalysis doc refs
       const attendeeAnalysisRefs = attendeeIds.map(id =>
@@ -82,7 +77,7 @@ function AdminDashboard() {
         batchDelete(sponsorSnap.docs.map(d => d.ref)),
         batchDelete(matchSnap.docs.map(d => d.ref)),
         batchDelete(attendeeAnalysisRefs),
-        batchDelete(narrativeCacheRefs)
+        batchDelete(narrativeCacheSnap.docs.map(d => d.ref))
       ]);
 
       // Delete the event itself last
