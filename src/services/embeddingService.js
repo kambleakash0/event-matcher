@@ -23,15 +23,34 @@ export function buildSponsorText(sponsorData) {
 }
 
 // Builds a predictable attendee ID
-export function buildAttendeeText(analysis, attendeeData) {
-  return [
-    analysis.summary,
-    `Goal: ${analysis.primaryGoal}`,
-    `Level: ${analysis.roleLevel}`,
-    `Profile: ${analysis.technicalProfile}`,
-    `Keywords: ${(analysis.mustHaves || []).join(', ')}`,
-    `Company: ${attendeeData.company}`
-  ].filter(Boolean).join(' ');
+export function buildAttendeeText(analysis = {}, attendeeData = {}) {
+  const parts = [];
+
+  if (analysis.summary) {
+    parts.push(analysis.summary);
+  }
+
+  if (analysis.primaryGoal) {
+    parts.push(`Goal: ${analysis.primaryGoal}`);
+  }
+
+  if (analysis.roleLevel) {
+    parts.push(`Level: ${analysis.roleLevel}`);
+  }
+
+  if (analysis.technicalProfile) {
+    parts.push(`Profile: ${analysis.technicalProfile}`);
+  }
+
+  if (Array.isArray(analysis.mustHaves) && analysis.mustHaves.length > 0) {
+    parts.push(`Keywords: ${analysis.mustHaves.join(', ')}`);
+  }
+
+  if (attendeeData.company) {
+    parts.push(`Company: ${attendeeData.company}`);
+  }
+
+  return parts.join(' ');
 }
 
 const embeddings = new GoogleGenerativeAIEmbeddings({
