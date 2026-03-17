@@ -2,7 +2,14 @@ import { GoogleGenerativeAIEmbeddings } from "@langchain/google-genai";
 
 // Builds a predictable sponsor ID
 export function buildSponsorText(sponsorData) {
-  let text = sponsorData.companyName?.toLowerCase().trim()+" Domain:"+sponsorData.domain?.toLowerCase().trim()+" Project:"+sponsorData.projectName?.toLowerCase().trim()+" PromotionType:"+(Array.isArray(sponsorData.promotionType) ? sponsorData.promotionType.join(', ') : sponsorData.promotionType || '')+" Team:";
+  const companyName = (sponsorData.companyName ?? '').toLowerCase().trim();
+  const domain = (sponsorData.domain ?? '').toLowerCase().trim();
+  const projectName = (sponsorData.projectName ?? '').toLowerCase().trim();
+  const promotionTypeText = Array.isArray(sponsorData.promotionType)
+    ? sponsorData.promotionType.join(', ')
+    : (sponsorData.promotionType || '');
+
+  let text = `${companyName} Domain:${domain} Project:${projectName} PromotionType:${promotionTypeText} Team:`;
   for (const attendee of sponsorData.attendingTeam || []) {
     if (typeof attendee === 'object') {
       if (attendee.title) text += attendee.title.toLowerCase().trim() + ",";
